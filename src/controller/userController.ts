@@ -177,38 +177,38 @@ const userController = {
                 $project: {
                   _id: 0,
                   friendshipId: "$_id",
-                  status: 1,
-                  requester: 1,
-                  version: 1,
+                  // status: 1,
+                  // requester: 1,
+                  // version: 1,
                 },
               },
             ],
             as: "joined",
           },
         },
-        {
-          $replaceRoot: {
-            newRoot: {
-              $mergeObjects: [
-                "$$ROOT",
-                {
-                  $arrayElemAt: ["$joined", 0],
-                },
-              ],
-            },
-          },
-        },
-        {
-          $project: {
-            email: 0,
-            password: 0,
-            phone: 0,
-            joined: 0,
-          },
-        },
+        // {
+        //   $replaceRoot: {
+        //     newRoot: {
+        //       $mergeObjects: [
+        //         "$$ROOT",
+        //         {
+        //           $arrayElemAt: ["$joined", 0],
+        //         },
+        //       ],
+        //     },
+        //   },
+        // },
+        // {
+        // $project: {
+        //   email: 0,
+        //   password: 0,
+        //   phone: 0,
+        // joined: 0,
+        // },
+        // },
       ]);
 
-      res.status(200).json(SuccessResponse(result, "success fetched!"));
+      res.status(200).json(SuccessResponse(result, "success 1 fetched!"));
     } catch (error) {
       res.status(404).json(error);
     }

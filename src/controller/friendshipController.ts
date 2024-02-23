@@ -25,41 +25,23 @@ const friendshipController = {
           {
             requester: requesterId,
             receipent: receipentId,
-            status: 4,
           },
           {
             requester: receipentId,
             receipent: requesterId,
-            status: 4,
           },
         ],
+        status: { $in: [1, 4] },
       });
 
-      await new Promise((res) => setTimeout(() => res(true), 3000));
-
-      let checkConcurrent = await friendshipmodel.findOne({
-        $or: [
-          {
-            requester: requesterId,
-            receipent: receipentId,
-            status: 1,
-          },
-          {
-            requester: receipentId,
-            receipent: requesterId,
-            status: 1,
-          },
-        ],
-      });
-
-      if (result == null && checkConcurrent === null) {
+      if (result == null) {
         result = await friendshipmodel.create({
           receipent: receipentId,
           requester: requesterId,
           status: 1,
           version: Date.now(),
         });
-      } else if (checkConcurrent.status === 1) {
+      } else if (result.status === 1) {
         res
           .status(500)
           .json(
@@ -98,6 +80,11 @@ const friendshipController = {
     const { requesterId, receipentId } = req.body;
     let result: any;
     try {
+      result = await friendshipmodel.findOne({
+        receipent: receipentId,
+        requester: requesterId,
+        status: 4,
+      });
       result = await friendshipmodel.updateOne(
         {
           receipent: receipentId,
@@ -131,6 +118,7 @@ const friendshipController = {
   reject: async function (req: Request, res: Response) {
     const { requesterId, receipentId } = req.body;
     let result: any;
+    await new Promise((res) => setTimeout(() => res(true), 3000));
     try {
       result = await friendshipmodel.findOne({
         receipent: receipentId,
