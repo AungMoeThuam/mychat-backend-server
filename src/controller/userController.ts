@@ -129,6 +129,7 @@ const userController = {
     try {
       const { name, userId } = req.query;
       const uID = new mongoose.Types.ObjectId(userId.toString());
+
       const result = await usermodel.aggregate([
         {
           $match: {
@@ -139,10 +140,19 @@ const userController = {
           },
         },
         {
+          $project: {
+            email: 0,
+            password: 0,
+            phone: 0,
+            __v: 0,
+          },
+        },
+        {
           $lookup: {
             from: "friendships",
             let: {
               userId: "$_id",
+              uID: uID,
             },
             pipeline: [
               {
@@ -155,7 +165,7 @@ const userController = {
                             $eq: ["$receipent", "$$userId"],
                           },
                           {
-                            $eq: ["$requester", uID],
+                            $eq: ["$requester", "$$uID"],
                           },
                         ],
                       },
@@ -165,7 +175,7 @@ const userController = {
                             $eq: ["$requester", "$$userId"],
                           },
                           {
-                            $eq: ["$receipent", uID],
+                            $eq: ["$receipent", "$$uID"],
                           },
                         ],
                       },
@@ -175,37 +185,34 @@ const userController = {
               },
               {
                 $project: {
-                  _id: 0,
                   friendshipId: "$_id",
-                  // status: 1,
-                  // requester: 1,
-                  // version: 1,
+                  _id: 0,
+                  status: 1,
+                  requester: 1,
+                  profilePhoto: 1,
                 },
               },
             ],
             as: "joined",
           },
         },
-        // {
-        //   $replaceRoot: {
-        //     newRoot: {
-        //       $mergeObjects: [
-        //         "$$ROOT",
-        //         {
-        //           $arrayElemAt: ["$joined", 0],
-        //         },
-        //       ],
-        //     },
-        //   },
-        // },
-        // {
-        // $project: {
-        //   email: 0,
-        //   password: 0,
-        //   phone: 0,
-        // joined: 0,
-        // },
-        // },
+        {
+          $replaceRoot: {
+            newRoot: {
+              $mergeObjects: [
+                "$$ROOT",
+                {
+                  $arrayElemAt: ["$joined", 0],
+                },
+              ],
+            },
+          },
+        },
+        {
+          $project: {
+            joined: 0,
+          },
+        },
       ]);
 
       res.status(200).json(SuccessResponse(result, "success 1 fetched!"));
