@@ -1,4 +1,4 @@
-import { ObjectId, WriteConcern } from "mongodb";
+import { GridFSBucketReadStream, ObjectId, WriteConcern } from "mongodb";
 import { friendshipmodel } from "../model/model";
 import { Request, Response } from "express";
 import {
@@ -83,8 +83,18 @@ const friendshipController = {
       result = await friendshipmodel.findOne({
         receipent: receipentId,
         requester: requesterId,
-        status: 4,
+        status: 1,
       });
+      if (result === null) {
+        return res
+          .status(200)
+          .json(
+            ErrorResponse(
+              101,
+              "There is a conflict friend action! try refresh!"
+            )
+          );
+      }
       result = await friendshipmodel.updateOne(
         {
           receipent: receipentId,
@@ -96,10 +106,6 @@ const friendshipController = {
           },
         }
       );
-      const a: SuccessMResponse = {
-        status: Status.Success,
-        data: result,
-      };
 
       sockets
         .get(requesterId)
@@ -107,25 +113,42 @@ const friendshipController = {
       sockets
         .get(receipentId)
         ?.forEach((socket) => socket.emit("accept", "acceptedByYou"));
-      res.status(200).json(a);
+      res
+        .status(200)
+        .json(SuccessResponse(result, "You have accepted friend request!"));
     } catch (error) {
-      res.status(404).json({
-        status: Status.Failed,
-        error,
-      });
+      res.status(404).json(ErrorResponse(101, error.message));
     }
   },
   reject: async function (req: Request, res: Response) {
     const { requesterId, receipentId } = req.body;
     let result: any;
-    await new Promise((res) => setTimeout(() => res(true), 3000));
     try {
       result = await friendshipmodel.findOne({
-        receipent: receipentId,
-        requester: requesterId,
-        history: true,
+        $or: [
+          {
+            receipent: receipentId,
+            requester: requesterId,
+            history: true,
+          },
+          {
+            receipent: receipentId,
+            requester: requesterId,
+            history: false,
+          },
+        ],
       });
-      if (result == null)
+      if (result == null || result.status === 3)
+        return res
+          .status(200)
+          .json(
+            ErrorResponse(
+              101,
+              "There is b a conflict concurrent request! try refresh!"
+            )
+          );
+
+      if (result.status === 1)
         result = await friendshipmodel.deleteOne({
           receipent: receipentId,
           requester: requesterId,
@@ -141,14 +164,6 @@ const friendshipController = {
           }
         );
 
-      sockets
-        .get(requesterId)
-        ?.forEach((socket) =>
-          socket.emit("reject", { requesterId, receipentId, status: 0 })
-        );
-      sockets
-        .get(receipentId)
-        ?.forEach((socket) => socket.emit("reject", "byYou"));
       res.status(200).json(SuccessResponse(result, "Rejected successfully!"));
     } catch (error) {
       res.status(404).json(ErrorResponse(101, "error in reject!"));
@@ -210,6 +225,7 @@ const friendshipController = {
             $addFields: {
               roomId: "$_id",
               name: "$joined.name",
+              profilePhoto: "$joined.profilePhoto",
             },
           },
           {
@@ -515,20 +531,11 @@ const friendshipController = {
           }
         );
 
-      const a: SuccessMResponse = {
-        status: Status.Success,
-        data: result,
-      };
-      console.log(a);
-      sockets
-        .get(receipentId)
-        ?.forEach((socket) => socket.emit("cancelRequest"));
-      res.status(200).json(a);
+      res
+        .status(200)
+        .json(SuccessResponse(result, "friend request has been canceled!"));
     } catch (error) {
-      res.status(404).json({
-        status: Status.Failed,
-        error,
-      });
+      res.status(404).json(ErrorResponse(101, "Something went wrong!"));
     }
   },
   unfriend: async function (req: Request, res: Response) {
@@ -536,6 +543,24 @@ const friendshipController = {
     let result: any;
     console.log(friendId, " - ", userId);
     try {
+      result = await friendshipmodel.findOne({
+        status: 3,
+        $or: [
+          { receipent: userId, requester: friendId },
+          { receipent: friendId, requester: userId },
+        ],
+      });
+      if (result === null) {
+        res
+          .status(404)
+          .json(
+            ErrorResponse(
+              101,
+              "there is a conflict concurrent request at the moment! try refresh!"
+            )
+          );
+        return;
+      }
       result = await friendshipmodel.updateOne(
         {
           $or: [
@@ -549,11 +574,6 @@ const friendshipController = {
         }
       );
 
-      const a: SuccessMResponse = {
-        status: Status.Success,
-        data: result,
-      };
-      console.log(a);
       sockets.get(friendId)?.forEach((socket) => {
         socket.emit("unfriend");
         socket.emit("friendRelationUpdate", {
@@ -564,12 +584,9 @@ const friendshipController = {
           .get(userId)
           ?.forEach((socket) => socket.emit("friendRelationUpdate", "accept"));
       });
-      res.status(200).json(a);
-    } catch (error) {
-      res.status(404).json({
-        status: Status.Failed,
-        error,
-      });
+      res.status(200).json(SuccessResponse(result, "successfully unfriended!"));
+    } catch (error: any) {
+      res.status(404).json(ErrorResponse(101, error.message));
     }
   },
 };
