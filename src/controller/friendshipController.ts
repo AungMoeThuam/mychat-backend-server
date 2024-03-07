@@ -357,6 +357,7 @@ const friendshipController = {
         {
           $addFields: {
             name: "$joined.name",
+            profilePhoto: "$joined.profilePhoto",
           },
         },
         {
@@ -366,13 +367,11 @@ const friendshipController = {
         },
       ]);
 
-      const a: SuccessMResponse = {
-        status: Status.Success,
-        data: result,
-      };
-      res.status(200).json(a);
+      res.status(200).json(SuccessResponse(result, "success fetched !"));
     } catch (error) {
-      res.status(404).json(error);
+      res
+        .status(404)
+        .json(ErrorResponse(101, "error in getting pending list!"));
     }
   },
   getPendingList: async function (req: Request, res: Response) {
@@ -442,13 +441,9 @@ const friendshipController = {
         },
       ]);
 
-      const a: SuccessMResponse = {
-        status: Status.Success,
-        data: result,
-      };
-      res.status(200).json(a);
+      res.status(200).json(SuccessResponse(result, "success!"));
     } catch (error) {
-      res.status(404).json(error);
+      res.status(404).json(ErrorResponse(101, error.message));
     }
   },
   getAll: async function (req: Request, res: Response) {

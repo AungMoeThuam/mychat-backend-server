@@ -154,6 +154,7 @@ const messageController = {
       res.status(200).json(response);
     } catch (error) {}
   },
+  getMessagesByPagination: async function (req: Request, res: Response) {},
 };
 
 export default messageController;

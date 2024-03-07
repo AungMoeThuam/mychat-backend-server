@@ -1,11 +1,20 @@
 import { Request, Response } from "express";
 
 import fs from "fs";
+import fsPromise from "fs/promises";
 import storagePath from "../storagePath";
 import multer, { MulterError } from "multer";
 import ProfilePhotoModel from "../model/profilePhotoModel";
 import { ErrorResponse, SuccessResponse } from "../helper/helper";
 import { usermodel } from "../model/model";
+
+const imageTypes = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/svg+xml",
+];
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -21,10 +30,10 @@ const storage = multer.diskStorage({
 let m = multer({
   storage,
   fileFilter: (req, file, cb) => {
-    if (file.mimetype !== "image/jpeg") {
+    if (!imageTypes.includes(file.mimetype)) {
       cb(
         new Error(
-          "file type not allowed! File format should be JPG, PNG, GIF or WebP files."
+          "file type not allowed! File format should be JPG, JPEG, PNG, SVG, GIF or WebP files."
         )
       );
     } else cb(null, true);
@@ -35,12 +44,22 @@ let upload = m.single("uploadPhoto");
 const fileController = {
   uploadProfilePhoto: async function (req: Request, res: Response) {
     upload(req, res, async function (err) {
-      if (err instanceof MulterError)
+      if (err instanceof MulterError) {
+        console.log("e- ", err.message);
         return res.status(500).json(ErrorResponse(101, "Multer error!"));
-      if (err) return res.status(500).json(ErrorResponse(101, err.message));
+      }
+
+      if (err) {
+        console.log("e- ", err.message);
+        return res.status(500).json(ErrorResponse(101, err.message));
+      }
 
       try {
         let file = req.file;
+
+        const oldResult = await usermodel.findOne({
+          _id: req.body.userId,
+        });
 
         const result = await usermodel.findOneAndUpdate(
           {
@@ -61,14 +80,17 @@ const fileController = {
           }
         );
         console.log(result);
-        // console.log("save the file", req.file);
+
+        await fsPromise.rm(
+          storagePath + "/storage/profiles/" + oldResult.profilePhoto.path
+        );
+
         return res
           .status(201)
           .json(SuccessResponse(result, "successfully uploaded!"));
-      } catch (error) {
-        return res
-          .status(500)
-          .json(ErrorResponse(1001, "Server error! please try again!"));
+      } catch (error: any) {
+        console.log("e- ", error.message);
+        return res.status(500).json(ErrorResponse(1001, error.message));
       }
     });
   },

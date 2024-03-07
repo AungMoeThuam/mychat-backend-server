@@ -7,10 +7,6 @@ const fileRoute = Router();
 // const callback = m.single("uploadPhoto");
 fileRoute.post("/fileupload", fileController.uploadFile);
 fileRoute.get("/videoplay/:videoname", fileController.serveFile);
-fileRoute.post(
-  "/profileupload",
-
-  fileController.uploadProfilePhoto
-);
+fileRoute.post("/profileupload", fileController.uploadProfilePhoto);
 
 export default fileRoute;
