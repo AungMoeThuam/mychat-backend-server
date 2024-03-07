@@ -221,6 +221,33 @@ const userController = {
     }
   },
 
+  getUser: async function (req: Request, res: Response) {
+    try {
+      const userId = req.params.id;
+      const result = await usermodel.findOne({
+        _id: userId,
+      });
+
+      if (!result) {
+        res.status(404).json(ErrorResponse(101, "Not found!"));
+      }
+
+      return res.status(200).json(
+        SuccessResponse(
+          {
+            _id: result._id,
+            email: result.email,
+            name: result.name,
+            phone: result.phone,
+          },
+          "resource successful!"
+        )
+      );
+    } catch (error) {
+      return res.status(500).json(ErrorResponse(101, error.message));
+    }
+  },
+
   getFriendList: async function (req: Request, res: Response) {},
 };
 
