@@ -14,7 +14,10 @@ friendRoute.get(
   "/friends/requests/:id",
   friendshipController.getRequestFriendList
 );
-
+friendRoute.post(
+  "/friends/check/friend",
+  friendshipController.checkFriendOrNot
+);
 friendRoute.post("/friends/request", friendshipController.request);
 friendRoute.post("/friends/accept", friendshipController.accept);
 friendRoute.post("/friends/reject", friendshipController.reject);

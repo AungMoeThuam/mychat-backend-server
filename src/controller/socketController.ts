@@ -101,6 +101,19 @@ async function ioConnection(
     });
     // socket.on("leaveroom", (data) => {});
 
+    //socket showing typing events when chatting
+    socket.on("start-typing", (data) => {
+      sockets
+        .get(data.friendId)
+        ?.forEach((socket) => socket.emit("start-typing"));
+    });
+    socket.on("stop-typing", (data) => {
+      sockets
+        .get(data.friendId)
+        ?.forEach((socket) => socket.emit("stop-typing"));
+    });
+
+    //socket on disconnect
     socket.on("disconnect", () => {
       console.log("disconnected", socket.id, " - ", socket.userId);
       let activeSocketsOfUser = sockets.get(socket.userId);

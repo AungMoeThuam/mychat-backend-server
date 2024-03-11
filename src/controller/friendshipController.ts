@@ -1,5 +1,5 @@
 import { GridFSBucketReadStream, ObjectId, WriteConcern } from "mongodb";
-import { friendshipmodel } from "../model/model";
+import { friendshipmodel, usermodel } from "../model/model";
 import { Request, Response } from "express";
 import {
   ErrorResponse,
@@ -14,6 +14,43 @@ import { CustomRequest } from "../utils/types";
 import { db, mongoose } from "../config/dbConnection";
 let concurrent: { id1: string; id2: string }[] = [];
 const friendshipController = {
+  checkFriendOrNot: async function (req: Request, res: Response) {
+    const { roomId, friendId } = req.body;
+    console.log(req.body);
+    let result: any;
+
+    try {
+      result = await friendshipmodel.findOne({
+        _id: roomId,
+      });
+
+      if (result == null || result.status !== 3) {
+        return res
+          .status(404)
+          .json(
+            ErrorResponse(
+              101,
+              "He is no longer your friend! Try add friend to have a conversation!"
+            )
+          );
+      }
+
+      result = await usermodel.findOne(
+        {
+          _id: friendId,
+        },
+        { email: 0, password: 0, phone: 0, __v: 0 }
+      );
+
+      return res
+        .status(200)
+        .json(SuccessResponse(result, "successfully requested!"));
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json(ErrorResponse(101, error.message));
+      return;
+    }
+  },
   request: async function (req: Request, res: Response) {
     const { requesterId, receipentId } = req.body;
 
