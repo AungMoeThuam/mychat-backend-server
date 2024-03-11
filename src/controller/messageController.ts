@@ -34,14 +34,17 @@ const messageController = {
             $match: {
               $or: [
                 {
-                  receiverId: currentUserId,
-                  deletedByReceiver: false,
                   roomId: new ObjectId(roomId),
                 },
-                {
-                  senderId: currentUserId,
-                  roomId: new ObjectId(roomId),
-                },
+                // {
+                //   receiverId: currentUserId,
+                //   deletedByReceiver: false,
+                //   roomId: new ObjectId(roomId),
+                // },
+                // {
+                //   senderId: currentUserId,
+                //   roomId: new ObjectId(roomId),
+                // },
               ],
             },
           },
@@ -83,49 +86,49 @@ const messageController = {
     try {
       const { messageid } = req.params;
       const { roomId, userId, friendId } = req.body;
-      // const messages = await messagemodel.deleteOne({
-      const message = await messagemodel.findOneAndDelete({
+
+      const result = await messagemodel.findOneAndDelete({
         _id: messageid,
       });
 
-      const response: SuccessMResponse = {
-        status: Status.Success,
-        data: message,
-      };
       if (
-        message.type === "video" ||
-        message.type === "image" ||
-        message.type === "file"
+        result.type.split("/")[0] === "video" ||
+        result.type.split("/")[0] === "image" ||
+        result.type !== "text"
       ) {
         console.log("file delete");
         try {
-          await fs.rm(storagePath + "/storage/chats/" + message.content);
+          await fs.rm(storagePath + "/storage/chats/" + result.content);
         } catch (error) {
           console.log("error - ", error);
         }
       }
-      sockets.get(userId).forEach((socket) =>
+      sockets.get(userId)?.forEach((socket) =>
         socket.emit("deleteMessage", {
-          messageId: message._id,
+          messageId: result._id,
           deleteBySender: true,
         })
       );
-      sockets.get(friendId).forEach((socket) =>
+      sockets.get(friendId)?.forEach((socket) =>
         socket.emit("deleteMessage", {
-          messageId: message._id,
+          messageId: result._id,
           deleteBySender: true,
         })
       );
 
-      res.status(200).json(response);
-    } catch (error) {}
+      return res.status(200).json(SuccessResponse(result, "success deleted!"));
+    } catch (error: unknown) {
+      if (error instanceof Error)
+        return res.status(404).json(ErrorResponse(101, error.message));
+      return res.status(404).json(ErrorResponse(101, "Something wrong !"));
+    }
   },
   deleteOneMessageByReceiver: async function (req: Request, res: Response) {
     try {
       const { messageid } = req.params;
       const { roomId, userId, friendId } = req.body;
 
-      const message = await messagemodel.updateOne(
+      const result = await messagemodel.findOneAndUpdate(
         {
           _id: messageid,
         },
@@ -133,26 +136,28 @@ const messageController = {
           deletedByReceiver: true,
         }
       );
-      const response: SuccessMResponse = {
-        status: Status.Success,
-        data: message,
-      };
 
-      sockets.get(userId).forEach((socket) =>
+      sockets.get(userId)?.forEach((socket) =>
         socket.emit("deleteMessage", {
           messageId: messageid,
           deleteBySender: false,
         })
       );
-      sockets.get(friendId).forEach((socket) =>
+      sockets.get(friendId)?.forEach((socket) =>
         socket.emit("deleteMessage", {
           messageId: messageid,
           deleteBySender: false,
         })
       );
 
-      res.status(200).json(response);
-    } catch (error) {}
+      return res
+        .status(200)
+        .json(SuccessResponse(result, "successfully deleted!"));
+    } catch (error: unknown) {
+      if (error instanceof Error)
+        return res.status(404).json(ErrorResponse(101, error.message));
+      return res.status(404).json(ErrorResponse(101, "Something wrong !"));
+    }
   },
   getMessagesByPagination: async function (req: Request, res: Response) {},
 };
