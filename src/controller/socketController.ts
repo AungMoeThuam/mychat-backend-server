@@ -8,24 +8,6 @@ async function ioConnection(
   activeUserList: Array<any>
 ) {
   ioServer.on("connection", (socket: Socket & extra) => {
-    console.log(socket.id);
-    console.log("query", socket.handshake.query.userId);
-    // let userId = socket.handshake.query.id as string;
-    // socket.userId = userId;
-    // let length = activeUserList.filter((a) => a == userId).length;
-
-    // if (length == 0) {
-    //   activeUserList.push(userId);
-    //   sockets.set(userId, [socket]);
-    //   socket.broadcast.emit("newActiveUser", activeUserList);
-    //   return;
-    // } else {
-    //   let s: Array<Socket> = sockets.get(userId);
-
-    //   s.push(socket);
-    //   sockets.set(userId, s);
-    // }
-
     // offline or online status events
     socket.on("active", ({ userId: id }) => {
       console.log("active - ", id);
@@ -35,7 +17,6 @@ async function ioConnection(
       if (length == 0) {
         activeUserList.push(id);
         sockets.set(id, [socket]);
-        // socket.broadcast.emit("newActiveUser", activeUserList);
         socket.broadcast.emit("newActiveUser", {
           userId: id,
           active: true,
@@ -50,16 +31,33 @@ async function ioConnection(
     });
 
     //chating events
-    socket.on("joinroom", (data) => {
-      console.log(data.roomId, " is joined the room");
-      socket.join(data.roomId);
-    });
+    socket.on("joinroom", (data) => socket.join(data.roomId));
 
     socket.on("message", async (data) => {
-      console.log("message", data);
+      let activeSocketsOfUser = sockets.get(data.receiverId);
+      let isReceiverOffline = true;
 
-      const res = await messagemodel.create(data);
-      const res2 = await friendshipmodel.updateOne(
+      let isInChat = false;
+      if (activeSocketsOfUser && activeSocketsOfUser.length > 0) {
+        isReceiverOffline = false;
+        isInChat = activeSocketsOfUser.every((item) =>
+          item.rooms.has(data.roomId)
+        );
+      }
+
+      let res, res2: any;
+      if (isReceiverOffline) {
+        //if the receipent user is offline, then status is sent
+        res = await messagemodel.create(data);
+      } else if (isInChat) {
+        //if the receipent user is using the chat with the sender, then status is seen
+        res = await messagemodel.create({ ...data, status: 2 });
+      } else {
+        //if the receipent user is online but not using the chat with sender, the status is delivered
+        res = await messagemodel.create({ ...data, status: 1 });
+      }
+
+      res2 = await friendshipmodel.updateOne(
         {
           _id: data.roomId,
         },
@@ -79,27 +77,28 @@ async function ioConnection(
           deletedByReceiver: msg.deletedByReceiver,
           createdAt: msg.createdAt,
           messageId: msg._id,
+          status: msg.status,
         };
-        console.log("value - ", value);
-        console.log("message is ", res);
 
         //emit to users in the room
         ioServer.to(data.roomId).emit("message", newMsg);
 
         socket.emit("newNotification", newMsg); // emit to the sender itself
-        console.log(sockets);
-        console.log("ss", sockets.get(data.receiverId));
 
         //emit to receiver
-        sockets.get(data.receiverId)?.forEach((s) => {
-          console.log(s.connected);
-          s.emit("newmessage", newMsg);
-        });
+        sockets
+          .get(data.receiverId)
+          ?.forEach((s) => s.emit("newmessage", newMsg));
       });
 
       // socket.emit("message");
     });
+
     // socket.on("leaveroom", (data) => {});
+    socket.on("leave_room_event", (roomId) => {
+      console.log("leave");
+      socket.leave(roomId);
+    });
 
     //socket showing typing events when chatting
     socket.on("start-typing", (data) => {

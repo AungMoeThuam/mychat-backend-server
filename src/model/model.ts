@@ -40,6 +40,10 @@ const messageModel = new mongoose.Schema({
     type: Date,
     default: Date.now(),
   },
+  status: {
+    type: Number,
+    default: 0,
+  }, // 0 SENT //1 DELIEVERED //2 SEEN
 });
 
 const roomModel = new mongoose.Schema({
