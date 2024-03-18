@@ -1,34 +1,40 @@
-import {
-  ErrorResponse,
-  Status,
-  SuccessMResponse,
-  SuccessResponse,
-} from "../helper/helper";
+import { ErrorResponse, SuccessResponse } from "../helper/helper";
 import { messagemodel } from "../model/model";
 import { Request, Response } from "express";
 import { sockets } from "../store";
 import fs from "fs/promises";
 import storagePath from "../storagePath";
-import jwt from "jsonwebtoken";
 import { ObjectId } from "mongodb";
+import Events from "../utils/events";
 
 const messageController = {
   getMessages: async function (req: Request, res: Response) {
     try {
-      const { roomId, currentUserId } = req.body;
+      const { roomId, currentUserId, friendId } = req.body;
+      let messages: any[] = [];
+      let oldMessages: any[] = [];
+      oldMessages = await messagemodel.find({
+        roomId: new ObjectId(roomId),
+        status: {
+          $in: [0, 1],
+        },
+        receiverId: currentUserId,
+      });
+      if (oldMessages.length > 0) {
+        let res = await messagemodel.updateMany(
+          {
+            roomId: new ObjectId(roomId),
+            receiverId: currentUserId,
+          },
+          {
+            $set: {
+              status: 2,
+            },
+          }
+        );
+      }
 
-      // const messages = await messagemodel
-      //   .find({
-      //     roomId: roomId,
-      //     $or: [
-      //       { receiverId: currentUserId, deletedByReceiver: false },
-      //       {
-      //         senderId: currentUserId,
-      //       },
-      //     ],
-      //   })
-      //   .select("-__v");
-      const messages = await messagemodel
+      messages = await messagemodel
         .aggregate([
           {
             $match: {
@@ -36,15 +42,6 @@ const messageController = {
                 {
                   roomId: new ObjectId(roomId),
                 },
-                // {
-                //   receiverId: currentUserId,
-                //   deletedByReceiver: false,
-                //   roomId: new ObjectId(roomId),
-                // },
-                // {
-                //   senderId: currentUserId,
-                //   roomId: new ObjectId(roomId),
-                // },
               ],
             },
           },
@@ -60,6 +57,7 @@ const messageController = {
               deletedBySender: 1,
               deletedByReceiver: 1,
               createdAt: 1,
+              status: 1,
             },
           },
           {
@@ -69,6 +67,12 @@ const messageController = {
           },
         ])
         .limit(20);
+      sockets.get(friendId)?.forEach((item) =>
+        item.emit(
+          Events.MESSAGE_STATUS,
+          oldMessages.map((item) => item._id)
+        )
+      );
 
       res
         .status(200)

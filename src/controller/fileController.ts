@@ -95,13 +95,11 @@ const fileController = {
     });
   },
   uploadFile: async function (req: Request, res: Response) {
-    console.log(storagePath);
-
     const wr = fs.createWriteStream(
       storagePath + "/storage/chats/" + req.headers["x-filename"]
     );
     req.pipe(wr).on("finish", () => {
-      res.status(200).json({ status: "success" });
+      return res.status(200).json({ status: "success" });
     });
   },
 
