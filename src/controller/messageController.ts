@@ -6,6 +6,7 @@ import fs from "fs/promises";
 import storagePath from "../storagePath";
 import { ObjectId } from "mongodb";
 import Events from "../utils/events";
+import mongoose from "mongoose";
 
 const messageController = {
   getMessages: async function (req: Request, res: Response) {
@@ -14,16 +15,18 @@ const messageController = {
       let messages: any[] = [];
       let oldMessages: any[] = [];
       oldMessages = await messagemodel.find({
-        roomId: new ObjectId(roomId),
+        roomId: new mongoose.Types.ObjectId(roomId),
         status: {
           $in: [0, 1],
         },
         receiverId: currentUserId,
       });
+
       if (oldMessages.length > 0) {
-        let res = await messagemodel.updateMany(
+        console.log("is greater ");
+        const e = await messagemodel.updateMany(
           {
-            roomId: new ObjectId(roomId),
+            roomId: new mongoose.Types.ObjectId(roomId),
             receiverId: currentUserId,
           },
           {
@@ -32,6 +35,7 @@ const messageController = {
             },
           }
         );
+        console.log("modified ", e.modifiedCount);
       }
 
       messages = await messagemodel
@@ -67,12 +71,15 @@ const messageController = {
           },
         ])
         .limit(20);
-      sockets.get(friendId)?.forEach((item) =>
-        item.emit(
-          Events.MESSAGE_STATUS,
-          oldMessages.map((item) => item._id)
-        )
-      );
+      console.log("old messages ", oldMessages);
+      console.log(" new messages, ", messages);
+
+      // sockets.get(friendId)?.forEach((item) =>
+      //   item.emit(
+      //     Events.MESSAGE_STATUS,
+      //     oldMessages.map((item) => item._id)
+      //   )
+      // );
 
       res
         .status(200)

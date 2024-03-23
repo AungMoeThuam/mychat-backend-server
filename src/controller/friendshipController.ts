@@ -1,5 +1,5 @@
 import { GridFSBucketReadStream, ObjectId, WriteConcern } from "mongodb";
-import { friendshipmodel, usermodel } from "../model/model";
+import { friendshipmodel, messagemodel, usermodel } from "../model/model";
 import { Request, Response } from "express";
 import {
   ErrorResponse,
@@ -297,8 +297,14 @@ const friendshipController = {
                     type: 1,
                     deletedByReceiver: 1,
                     messageCreatedAt: "$createdAt",
+                    status: 1,
                   },
                 },
+                // {
+                //   $addFields: {
+                //     countUnReadMessages: countUnReadMessage.length,
+                //   },
+                // },
               ],
             },
           },
@@ -309,22 +315,57 @@ const friendshipController = {
             },
           },
           {
+            $lookup: {
+              from: "messages",
+              localField: "_id",
+              foreignField: "roomId",
+              as: "joined1",
+              pipeline: [
+                {
+                  $match: {
+                    status: {
+                      $in: [0, 1],
+                    },
+                  },
+                },
+                {
+                  $group: {
+                    _id: null,
+                    count: { $sum: 1 }, // Counting documents
+                  },
+                },
+                {
+                  $project: {
+                    _id: 0,
+                    unreadMessageCount: "$count",
+                  },
+                },
+              ],
+            },
+          },
+          {
             $project: {
               _id: 0,
             },
           },
           {
+            $unwind: {
+              path: "$joined1",
+              preserveNullAndEmptyArrays: true,
+            },
+          },
+          {
             $replaceRoot: {
               newRoot: {
-                $mergeObjects: ["$$ROOT", "$joined"],
+                $mergeObjects: ["$$ROOT", "$joined", "$joined1"],
               },
             },
           },
           {
-            $unset: "joined",
+            $unset: ["joined", "joined1"],
           },
         ])
-        .sort({ latestInteractedAt: -1 });
+        .sort({ messageCreatedAt: -1 });
 
       const newList = result.map((f) => {
         if (activeUserList.filter((s) => s == f.friendId).length === 1) {
