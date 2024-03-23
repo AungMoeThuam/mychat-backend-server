@@ -1,6 +1,9 @@
 import socketio, { Socket } from "socket.io";
 import { extra } from "../store";
 import { friendshipmodel, messagemodel } from "../model/model";
+import friendshipController from "./friendshipController";
+import { mongoose } from "../config/dbConnection";
+import Events from "../utils/events";
 
 async function ioConnection(
   ioServer: socketio.Server,
@@ -9,8 +12,130 @@ async function ioConnection(
 ) {
   ioServer.on("connection", (socket: Socket & extra) => {
     // offline or online status events
-    socket.on("active", ({ userId: id }) => {
-      console.log("active - ", id);
+    socket.on("active", async ({ userId: id }) => {
+      const result = await friendshipmodel
+        .aggregate([
+          {
+            $match: {
+              $or: [
+                {
+                  receipent: new mongoose.Types.ObjectId(id),
+                  status: 3,
+                },
+                {
+                  requester: new mongoose.Types.ObjectId(id),
+                  status: 3,
+                },
+              ],
+            },
+          },
+          {
+            $addFields: {
+              friendId: {
+                $cond: {
+                  if: {
+                    $eq: ["$receipent", new mongoose.Types.ObjectId(id)],
+                  },
+                  then: "$requester",
+                  else: "$receipent",
+                },
+              },
+            },
+          },
+          {
+            $lookup: {
+              from: "users",
+              localField: "friendId",
+              foreignField: "_id",
+              as: "joined",
+              pipeline: [
+                {
+                  $unset: ["_id", "email", "password", "phone", "createdAt"],
+                },
+              ],
+            },
+          },
+          {
+            $unwind: "$joined",
+          },
+          {
+            $addFields: {
+              roomId: "$_id",
+              name: "$joined.name",
+              profilePhoto: "$joined.profilePhoto",
+            },
+          },
+          {
+            $project: {
+              joined: 0,
+              __v: 0,
+              latestInteractedAt: 0,
+              createdAt: 0,
+            },
+          },
+          {
+            $unwind: {
+              path: "$joined",
+              preserveNullAndEmptyArrays: true,
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              friendId: 1,
+            },
+          },
+          {
+            $unset: "joined",
+          },
+        ])
+        .sort({ latestInteractedAt: -1 });
+      console.log(result);
+
+      const newList = result
+        .map((f) => {
+          if (activeUserList.filter((s) => s == f.friendId).length === 1) {
+            return { ...f, active: true };
+          } else return f;
+        })
+        .filter((item) => item.active === true);
+      console.log(newList);
+
+      const isThereAnyUnreadMessages = await messagemodel.find({
+        receiverId: id,
+        status: 0,
+      });
+
+      if (isThereAnyUnreadMessages.length > 0) {
+        await messagemodel.updateMany(
+          {
+            $or: [
+              {
+                receiverId: id,
+                status: 0,
+              },
+              {
+                senderId: id,
+                status: 0,
+              },
+            ],
+          },
+          {
+            status: 1,
+          }
+        );
+      }
+
+      newList.map((item) => {
+        console.log(item.friendId.toString());
+
+        sockets.get(item.friendId.toString())?.forEach((sock) =>
+          sock.emit(Events.MESSAGE_STATUS_DELIVERED, {
+            friendId: id,
+          })
+        );
+      });
+
       socket.userId = id;
       let length = activeUserList.filter((userId) => userId == id).length;
 
