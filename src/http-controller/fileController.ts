@@ -1,12 +1,10 @@
 import { Request, Response } from "express";
-
 import fs from "fs";
 import fsPromise from "fs/promises";
 import storagePath from "../storagePath";
 import multer, { MulterError } from "multer";
-import ProfilePhotoModel from "../model/profilePhotoModel";
 import { ErrorResponse, SuccessResponse } from "../helper/helper";
-import { usermodel } from "../model/model";
+import usermodel from "../model/userModel";
 
 const imageTypes = [
   "image/jpeg",
@@ -22,7 +20,6 @@ const storage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    console.log(file);
     cb(null, file.fieldname + "-" + uniqueSuffix + "-" + file.originalname);
   },
 });
@@ -44,15 +41,10 @@ let upload = m.single("uploadPhoto");
 const fileController = {
   uploadProfilePhoto: async function (req: Request, res: Response) {
     upload(req, res, async function (err) {
-      if (err instanceof MulterError) {
-        console.log("e- ", err.message);
-        return res.status(500).json(ErrorResponse(101, "Multer error!"));
-      }
+      if (err instanceof MulterError)
+        return res.status(500).json(ErrorResponse("Multer error!"));
 
-      if (err) {
-        console.log("e- ", err.message);
-        return res.status(500).json(ErrorResponse(101, err.message));
-      }
+      if (err) return res.status(500).json(ErrorResponse(err.message));
 
       try {
         let file = req.file;
@@ -79,18 +71,14 @@ const fileController = {
             new: true,
           }
         );
-        console.log(result);
 
         await fsPromise.rm(
           storagePath + "/storage/profiles/" + oldResult.profilePhoto.path
         );
 
-        return res
-          .status(201)
-          .json(SuccessResponse(result, "successfully uploaded!"));
-      } catch (error: any) {
-        console.log("e- ", error.message);
-        return res.status(500).json(ErrorResponse(1001, error.message));
+        return res.status(200).json(result);
+      } catch (error) {
+        return res.status(500).json(ErrorResponse(error.message));
       }
     });
   },
@@ -106,14 +94,13 @@ const fileController = {
   serveFile: async function (req: Request, res: Response) {
     try {
       const { videoname } = req.params;
-      console.log(videoname);
+
       const range = req.headers.range;
       if (!range) {
         res.status(400).send("Requires Range header");
       }
       const videoPath = "./src/storage/chats/" + videoname;
       const videoSize = fs.statSync(videoPath).size;
-      console.log(videoSize);
       const CHUNK_SIZE = 10 ** 6;
       const start = Number(range.replace(/\D/g, ""));
       const end = Math.min(start + CHUNK_SIZE, videoSize - 1);

@@ -1,21 +1,16 @@
-import messageController from "../controller/messageController";
+import messageController from "../http-controller/messageController";
 import { Router } from "express";
 const messageRoute = Router();
 
 messageRoute.get("/messages/:_roomid", messageController.getMessages);
 messageRoute.post("/messages", messageController.getMessages);
 messageRoute.delete(
-  "/messages/bysender/:messageid",
+  "/messages/bysender",
   messageController.deleteOneMessageBySender
 );
 messageRoute.delete(
-  "/messages/byreceiver/:messageid",
+  "/messages/byreceiver",
   messageController.deleteOneMessageByReceiver
 );
-// messageRoute.delete("/messages", messageController.deleteManyMessages);
-// messageRoute.delete(
-//   "/messages/all/:_roomid",
-//   messageController.deleteAllMessages
-// );
 
 export default messageRoute;

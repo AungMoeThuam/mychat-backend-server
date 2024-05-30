@@ -1,99 +1,43 @@
-import { GridFSBucketReadStream, ObjectId, WriteConcern } from "mongodb";
-import { friendshipmodel, messagemodel, usermodel } from "../model/model";
 import { Request, Response } from "express";
-import {
-  ErrorResponse,
-  Status,
-  SuccessMResponse,
-  SuccessResponse,
-} from "../helper/helper";
-
-import { activeUserList, extra, sockets } from "../store";
-import { Socket } from "socket.io";
+import { ErrorResponse, SuccessResponse } from "../helper/helper";
+import { activeUserList, sockets } from "../store";
 import { CustomRequest } from "../utils/types";
-import { db, mongoose } from "../config/dbConnection";
-let concurrent: { id1: string; id2: string }[] = [];
+import { mongoose } from "../config/dbConnection";
+import { friendshipService } from "../service/friendshipService";
+import friendshipmodel from "../model/friendshipModel";
+
 const friendshipController = {
   checkFriendOrNot: async function (req: Request, res: Response) {
-    const { roomId, friendId } = req.body;
-    console.log(req.body);
-    let result: any;
+    const { roomId, friendId, currentUserId } = req.body;
 
     try {
-      result = await friendshipmodel.findOne({
-        _id: roomId,
-      });
-
-      if (result == null || result.status !== 3) {
-        return res
-          .status(404)
-          .json(
-            ErrorResponse(
-              101,
-              "He is no longer your friend! Try add friend to have a conversation!"
-            )
-          );
-      }
-
-      result = await usermodel.findOne(
-        {
-          _id: friendId,
-        },
-        { email: 0, password: 0, phone: 0, __v: 0 }
+      const result = await friendshipService.checkFriendOrNot(
+        roomId,
+        friendId,
+        currentUserId
       );
+      if (result.error)
+        return res
+          .status(401)
+          .json(ErrorResponse(result.error?.message, result.error.errorCode));
 
-      return res
-        .status(200)
-        .json(SuccessResponse(result, "successfully requested!"));
-    } catch (error: any) {
-      console.error(error);
-      res.status(500).json(ErrorResponse(101, error.message));
-      return;
+      return res.status(200).json(result.data);
+    } catch (error) {
+      return res.status(500).json(ErrorResponse(error.message));
     }
   },
+
   request: async function (req: Request, res: Response) {
     const { requesterId, receipentId } = req.body;
 
-    let result: any;
-
     try {
-      result = await friendshipmodel.findOne({
-        $or: [
-          {
-            requester: requesterId,
-            receipent: receipentId,
-          },
-          {
-            requester: receipentId,
-            receipent: requesterId,
-          },
-        ],
-        status: { $in: [1, 4] },
+      const result = await friendshipService.request({
+        receipentId,
+        requesterId,
       });
 
-      if (result == null) {
-        result = await friendshipmodel.create({
-          receipent: receipentId,
-          requester: requesterId,
-          status: 1,
-          version: Date.now(),
-        });
-      } else if (result.status === 1) {
-        res
-          .status(500)
-          .json(
-            ErrorResponse(101, "cannot process the request at the moment!")
-          );
-        return;
-      } else {
-        result = await friendshipmodel.updateOne(result, {
-          $set: {
-            receipent: receipentId,
-            requester: requesterId,
-            status: 1,
-          },
-        });
-      }
+      if (result.error)
+        return res.status(401).json(ErrorResponse(result.error.message));
 
       sockets.get(receipentId)?.forEach((socket) => {
         socket.emit("request", {
@@ -104,45 +48,22 @@ const friendshipController = {
         socket.emit("friendRelationUpdate", "request");
       });
 
-      return res
-        .status(200)
-        .json(SuccessResponse(result, "successfully requested!"));
-    } catch (error: any) {
-      console.error(error);
-      res.status(500).json(ErrorResponse(101, error.message));
-      return;
+      return res.status(200).json({ message: "successfully requested!" });
+    } catch (error) {
+      return res.status(500).json(ErrorResponse(error.message));
     }
   },
   accept: async function (req: Request, res: Response) {
     const { requesterId, receipentId } = req.body;
-    let result: any;
+
     try {
-      result = await friendshipmodel.findOne({
-        receipent: receipentId,
-        requester: requesterId,
-        status: 1,
+      const result = await friendshipService.accept({
+        receipentId,
+        requesterId,
       });
-      if (result === null) {
-        return res
-          .status(200)
-          .json(
-            ErrorResponse(
-              101,
-              "There is a conflict friend action! try refresh!"
-            )
-          );
-      }
-      result = await friendshipmodel.updateOne(
-        {
-          receipent: receipentId,
-          requester: requesterId,
-        },
-        {
-          $set: {
-            status: 3,
-          },
-        }
-      );
+
+      if (result.error)
+        return res.status(401).json(ErrorResponse(result.error.message));
 
       sockets
         .get(requesterId)
@@ -150,66 +71,32 @@ const friendshipController = {
       sockets
         .get(receipentId)
         ?.forEach((socket) => socket.emit("accept", "acceptedByYou"));
-      res
+
+      return res
         .status(200)
-        .json(SuccessResponse(result, "You have accepted friend request!"));
+        .json({ message: "You have accepted friend request!" });
     } catch (error) {
-      res.status(404).json(ErrorResponse(101, error.message));
+      return res.status(404).json(ErrorResponse(error.message));
     }
   },
   reject: async function (req: Request, res: Response) {
     const { requesterId, receipentId } = req.body;
-    let result: any;
     try {
-      result = await friendshipmodel.findOne({
-        $or: [
-          {
-            receipent: receipentId,
-            requester: requesterId,
-            history: true,
-          },
-          {
-            receipent: receipentId,
-            requester: requesterId,
-            history: false,
-          },
-        ],
+      const result = await friendshipService.reject({
+        receipentId,
+        requesterId,
       });
-      if (result == null || result.status === 3)
-        return res
-          .status(200)
-          .json(
-            ErrorResponse(
-              101,
-              "There is b a conflict concurrent request! try refresh!"
-            )
-          );
 
-      if (result.status === 1)
-        result = await friendshipmodel.deleteOne({
-          receipent: receipentId,
-          requester: requesterId,
-        });
-      else
-        result = await friendshipmodel.updateOne(
-          {
-            receipent: receipentId,
-            requester: requesterId,
-          },
-          {
-            status: 4,
-          }
-        );
+      if (result.error)
+        return res.status(404).json(ErrorResponse(result.error.message));
 
-      res.status(200).json(SuccessResponse(result, "Rejected successfully!"));
+      return res.status(200).json({ message: "Rejected successfully!" });
     } catch (error) {
-      res.status(404).json(ErrorResponse(101, "error in reject!"));
+      res.status(404).json(ErrorResponse("error in reject!"));
     }
   },
   getFriendsList: async function (req: CustomRequest, res: Response) {
     let result: any;
-    // const { id: userId } = req.params;
-    console.log("id- ", req.encodedToken);
     let userId = req.encodedToken._id;
 
     try {
@@ -372,9 +259,9 @@ const friendshipController = {
           return { ...f, active: true };
         } else return f;
       });
-      res.status(200).json(SuccessResponse(newList, "data fetching success!"));
+      res.status(200).json(newList);
     } catch (error) {
-      res.status(404).json(ErrorResponse(101, "internal server error!"));
+      res.status(500).json(ErrorResponse("internal server error!"));
     }
   },
   getRequestFriendList: async function (req: Request, res: Response) {
@@ -445,11 +332,9 @@ const friendshipController = {
         },
       ]);
 
-      res.status(200).json(SuccessResponse(result, "success fetched !"));
+      res.status(200).json(result);
     } catch (error) {
-      res
-        .status(404)
-        .json(ErrorResponse(101, "error in getting pending list!"));
+      res.status(404).json(ErrorResponse("error in getting pending list!"));
     }
   },
   getPendingList: async function (req: Request, res: Response) {
@@ -510,6 +395,7 @@ const friendshipController = {
         {
           $addFields: {
             name: "$joined.name",
+            profilePhoto: "$joined.profilePhoto",
           },
         },
         {
@@ -519,133 +405,19 @@ const friendshipController = {
         },
       ]);
 
-      res.status(200).json(SuccessResponse(result, "success!"));
-    } catch (error) {
-      res.status(404).json(ErrorResponse(101, error.message));
-    }
-  },
-  getAll: async function (req: Request, res: Response) {
-    try {
-      const userId = new ObjectId(req.params.id);
-      console.log(userId);
-      const result = await friendshipmodel.aggregate([
-        {
-          $match: {
-            userId: userId,
-          },
-        },
-        {
-          $unwind: "$relationships",
-        },
-        {
-          $match: {
-            "relationships.status": "accepted",
-          },
-        },
-        {
-          $replaceRoot: {
-            newRoot: {
-              $mergeObjects: ["$$ROOT", "$relationships"],
-            },
-          },
-        },
-        {
-          $lookup: {
-            from: "users",
-            localField: "friendId",
-            foreignField: "_id",
-            as: "joined",
-            pipeline: [
-              {
-                $unset: ["_id", "email", "password", "phone"],
-              },
-            ],
-          },
-        },
-        {
-          $replaceRoot: {
-            newRoot: {
-              $mergeObjects: ["$$ROOT", { $arrayElemAt: ["$joined", 0] }],
-            },
-          },
-        },
-        {
-          $unset: ["joined", "relationships"],
-        },
-      ]);
-      console.log(result);
       res.status(200).json(result);
     } catch (error) {
-      res.status(404).json(error);
-    }
-  },
-  cancelRequest: async function (req: Request, res: Response) {
-    const { requesterId, receipentId } = req.body;
-    let result: any;
-    try {
-      result = await friendshipmodel.findOne({
-        receipent: receipentId,
-        requester: requesterId,
-        history: true,
-      });
-      if (result == null)
-        result = await friendshipmodel.deleteOne({
-          receipent: receipentId,
-          requester: requesterId,
-        });
-      else
-        result = await friendshipmodel.updateOne(
-          {
-            receipent: receipentId,
-            requester: requesterId,
-          },
-          {
-            status: 4,
-          }
-        );
-
-      res
-        .status(200)
-        .json(SuccessResponse(result, "friend request has been canceled!"));
-    } catch (error) {
-      res.status(404).json(ErrorResponse(101, "Something went wrong!"));
+      res.status(404).json(ErrorResponse(error.message));
     }
   },
   unfriend: async function (req: Request, res: Response) {
     const { friendId, userId } = req.body;
-    let result: any;
-    console.log(friendId, " - ", userId);
     try {
-      result = await friendshipmodel.findOne({
-        status: 3,
-        $or: [
-          { receipent: userId, requester: friendId },
-          { receipent: friendId, requester: userId },
-        ],
-      });
-      if (result === null) {
-        res
-          .status(404)
-          .json(
-            ErrorResponse(
-              101,
-              "there is a conflict concurrent request at the moment! try refresh!"
-            )
-          );
-        return;
+      const result = await friendshipService.unfriend({ friendId, userId });
+
+      if (result.error) {
+        return res.status(401).json(ErrorResponse(result.error.message));
       }
-      result = await friendshipmodel.updateOne(
-        {
-          $or: [
-            { receipent: userId, requester: friendId },
-            { receipent: friendId, requester: userId },
-          ],
-        },
-        {
-          history: true,
-          status: 4,
-        }
-      );
 
       sockets.get(friendId)?.forEach((socket) => {
         socket.emit("unfriend");
@@ -657,9 +429,9 @@ const friendshipController = {
           .get(userId)
           ?.forEach((socket) => socket.emit("friendRelationUpdate", "accept"));
       });
-      res.status(200).json(SuccessResponse(result, "successfully unfriended!"));
+      return res.status(200).json({ message: "successfully unfriended!" });
     } catch (error: any) {
-      res.status(404).json(ErrorResponse(101, error.message));
+      return res.status(404).json(ErrorResponse(error.message));
     }
   },
 };

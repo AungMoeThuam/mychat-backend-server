@@ -1,0 +1,4 @@
+Error Code to show which layers cause an Error
+model level code = 111
+service level code = 222
+controller level code = 333
