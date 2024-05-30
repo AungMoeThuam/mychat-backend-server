@@ -1,9 +1,10 @@
 import socketio, { Socket } from "socket.io";
 import { extra } from "../store";
-import { friendshipmodel, messagemodel } from "../model/model";
-import friendshipController from "./friendshipController";
-import { mongoose } from "../config/dbConnection";
 import Events from "../utils/events";
+import { getConversationList } from "../controller/messageController";
+import { friendshipService } from "../service/friendshipService";
+import friendshipmodel from "../model/friendshipModel";
+import messagemodel from "../model/messageModel";
 
 async function ioConnection(
   ioServer: socketio.Server,
@@ -13,84 +14,7 @@ async function ioConnection(
   ioServer.on("connection", (socket: Socket & extra) => {
     // offline or online status events
     socket.on("active", async ({ userId: id }) => {
-      const result = await friendshipmodel
-        .aggregate([
-          {
-            $match: {
-              $or: [
-                {
-                  receipent: new mongoose.Types.ObjectId(id),
-                  status: 3,
-                },
-                {
-                  requester: new mongoose.Types.ObjectId(id),
-                  status: 3,
-                },
-              ],
-            },
-          },
-          {
-            $addFields: {
-              friendId: {
-                $cond: {
-                  if: {
-                    $eq: ["$receipent", new mongoose.Types.ObjectId(id)],
-                  },
-                  then: "$requester",
-                  else: "$receipent",
-                },
-              },
-            },
-          },
-          {
-            $lookup: {
-              from: "users",
-              localField: "friendId",
-              foreignField: "_id",
-              as: "joined",
-              pipeline: [
-                {
-                  $unset: ["_id", "email", "password", "phone", "createdAt"],
-                },
-              ],
-            },
-          },
-          {
-            $unwind: "$joined",
-          },
-          {
-            $addFields: {
-              roomId: "$_id",
-              name: "$joined.name",
-              profilePhoto: "$joined.profilePhoto",
-            },
-          },
-          {
-            $project: {
-              joined: 0,
-              __v: 0,
-              latestInteractedAt: 0,
-              createdAt: 0,
-            },
-          },
-          {
-            $unwind: {
-              path: "$joined",
-              preserveNullAndEmptyArrays: true,
-            },
-          },
-          {
-            $project: {
-              _id: 0,
-              friendId: 1,
-            },
-          },
-          {
-            $unset: "joined",
-          },
-        ])
-        .sort({ latestInteractedAt: -1 });
-      console.log(result);
+      const result = await getConversationList(id);
 
       const newList = result
         .map((f) => {
@@ -99,7 +23,6 @@ async function ioConnection(
           } else return f;
         })
         .filter((item) => item.active === true);
-      console.log(newList);
 
       const isThereAnyUnreadMessages = await messagemodel.find({
         receiverId: id,
@@ -156,9 +79,51 @@ async function ioConnection(
     });
 
     //chating events
-    socket.on("joinroom", (data) => socket.join(data.roomId));
+    socket.on("joinroom", async (data) => {
+      const { roomId, userId, friendId } = data;
+      socket.join(roomId);
 
-    socket.on("message", async (data) => {
+      //getting unreadmessage count of the user who just joins the chat with his friend
+      const unreadMessageCount = await messagemodel.find({
+        receiverId: userId,
+        status: {
+          $in: [0, 1],
+        },
+      });
+
+      if (unreadMessageCount.length > 0) {
+        //if there is a count of unread messages, then update all of them into seen status
+        await messagemodel.updateMany(
+          {
+            receiverId: userId,
+            status: {
+              $in: [0, 1],
+            },
+          },
+          {
+            status: 2,
+          }
+        );
+
+        //then emit the event to inform the friend that the unread message are now seen by the user who just joins the chat
+        sockets
+          .get(friendId)
+          ?.forEach((sock) => sock.emit(Events.MESSAGE_STATUS_SEEN));
+      }
+    });
+
+    socket.on("message", async (data, callback) => {
+      const result = await friendshipService.checkFriendOrNot(
+        data.roomId,
+        data.receiverId,
+        data.senderId
+      );
+
+      if (result.error)
+        return socket.emit("error", {
+          status: "error",
+          message: result.error,
+        });
       let activeSocketsOfUser = sockets.get(data.receiverId);
       let isReceiverOffline = true;
 
@@ -170,27 +135,27 @@ async function ioConnection(
         );
       }
 
-      let res, res2: any;
+      // return socket.emit("error", {
+      //   status: "error",
+      //   message: "failed to send!",
+      // });
+      let temporaryMessageId = data.temporaryMessageId;
+      delete data.temporaryMessageId;
+      let validateMessage = { ...data };
+
+      let res: any;
       if (isReceiverOffline) {
         //if the receipent user is offline, then status is sent
-        res = await messagemodel.create(data);
+        res = await messagemodel.create(validateMessage);
       } else if (isInChat) {
         //if the receipent user is using the chat with the sender, then status is seen
-        res = await messagemodel.create({ ...data, status: 2 });
+        res = await messagemodel.create({ ...validateMessage, status: 2 });
       } else {
         //if the receipent user is online but not using the chat with sender, the status is delivered
-        res = await messagemodel.create({ ...data, status: 1 });
+        res = await messagemodel.create({ ...validateMessage, status: 1 });
       }
 
-      res2 = await friendshipmodel.updateOne(
-        {
-          _id: data.roomId,
-        },
-        {
-          latestInteractedAt: Date.now(),
-        }
-      );
-      Promise.all([res, res2]).then((value) => {
+      Promise.all([res]).then((value) => {
         let msg = value[0];
         let newMsg = {
           senderId: msg.senderId,
@@ -203,10 +168,16 @@ async function ioConnection(
           createdAt: msg.createdAt,
           messageId: msg._id,
           status: msg.status,
+          temporaryMessageId,
         };
 
         //emit to users in the room
-        ioServer.to(data.roomId).emit("message", newMsg);
+        ioServer.to(data.roomId).emit(Events.MESSAGE, newMsg);
+
+        // socket.emit("message-sending-status", {
+        //   status: "success",
+        //   temporaryMessageId: temporaryMessageId,
+        // });
 
         socket.emit("newNotification", newMsg); // emit to the sender itself
 
@@ -220,44 +191,50 @@ async function ioConnection(
     });
 
     // socket.on("leaveroom", (data) => {});
-    socket.on("leave_room_event", (roomId) => {
-      console.log("leave");
-      socket.leave(roomId);
-    });
+    socket.on("leave_room_event", (roomId) => socket.leave(roomId));
 
     //socket showing typing events when chatting
-    socket.on("start-typing", (data) => {
+    socket.on(Events.START_TYPING, (data) => {
       sockets
         .get(data.friendId)
-        ?.forEach((socket) => socket.emit("start-typing"));
+        ?.forEach((socket) => socket.emit(Events.START_TYPING));
     });
-    socket.on("stop-typing", (data) => {
+    socket.on(Events.STOP_TYPING, (data) => {
       sockets
         .get(data.friendId)
-        ?.forEach((socket) => socket.emit("stop-typing"));
+        ?.forEach((socket) => socket.emit(Events.STOP_TYPING));
     });
 
     //socket on disconnect
     socket.on("disconnect", () => {
-      console.log("disconnected", socket.id, " - ", socket.userId);
+      //getting the current active sockets of that disconnected user
       let activeSocketsOfUser = sockets.get(socket.userId);
 
+      //checking whether the disconnected user has active sockets
       if (activeSocketsOfUser) {
+        //checking whether the disconnected user has more than 1  active socket
         if (activeSocketsOfUser.length > 1) {
+          //if so, then remove the disconnected socket
           activeSocketsOfUser = activeSocketsOfUser.filter(
             (s: any) => s.id != socket.id
           );
+
+          //set the actice sockets of that user with updated actice sockets list
           sockets.set(socket.userId, activeSocketsOfUser);
         } else {
-          socket.broadcast.emit(
-            "newOfflineUser",
-            activeUserList.filter((i) => i === socket.userId)
-          );
+          // if the disconnected user has empty active sockets,
+          // then remove the user from actice users list
+
+          //emiting events to all the other actice users to inform that disconnected user
           socket.broadcast.emit("newOfflineUser", {
             userId: socket.userId,
             active: false,
           });
+
+          //removing the the map key pair that store the active sockets of that user
           sockets.delete(socket.userId);
+
+          //removing that user from actice user list
           activeUserList.splice(activeUserList.indexOf(socket.userId), 1);
         }
       }
