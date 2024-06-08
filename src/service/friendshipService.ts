@@ -16,6 +16,17 @@ interface UnFriendActionParameter {
   userId: string;
 }
 
+interface BlockServiceParameter {
+  friendshipId: string;
+  currentUserId: string;
+  friendId: string;
+}
+
+interface UnblockServiceParameter {
+  friendshipId: string;
+  currentUserId: string;
+}
+
 export const friendshipService = {
   checkFriendOrNot: async function (
     roomId: string,
@@ -76,7 +87,7 @@ export const friendshipService = {
             receipent: requesterId,
           },
         ],
-        status: { $in: [1, 4] },
+        status: { $in: [1, 4, 2] },
       });
 
       if (result == null) {
@@ -86,7 +97,7 @@ export const friendshipService = {
           status: 1,
           version: Date.now(),
         });
-      } else if (result.status === 1) {
+      } else if (result.status === 1 || result.status === 2) {
         return ErrorServiceResult("cannot process the request at the moment!");
       } else {
         result = await friendshipmodel.updateOne(result, {
@@ -170,7 +181,9 @@ export const friendshipService = {
             requester: requesterId,
           },
           {
-            status: 4,
+            $set: {
+              status: 4,
+            },
           }
         );
 
@@ -204,14 +217,108 @@ export const friendshipService = {
           ],
         },
         {
-          history: true,
-          status: 4,
+          $set: {
+            status: 4,
+            history: true,
+          },
         }
       );
 
       return SuccessServiceResult(result);
     } catch (error: any) {
       return ErrorServiceResult(error.message);
+    }
+  },
+  block: async function (blockServiceParameter: BlockServiceParameter) {
+    const { friendshipId, currentUserId, friendId } = blockServiceParameter;
+    let result: any;
+    try {
+      console.log(friendId, " - ff - ", currentUserId);
+      result = await friendshipmodel.findOne({
+        _id: friendshipId,
+      });
+
+      console.log(result);
+      console.log(
+        "operation is true ",
+        result?.receipent ==
+          new mongoose.Types.ObjectId(currentUserId).toString()
+      );
+      if (result !== null && result.status === 2)
+        return ErrorServiceResult(
+          `There is b a conflict concurrent request! try refresh! `
+        );
+
+      if (!result) {
+        result = await friendshipmodel.create({
+          receipent: currentUserId,
+          status: 2,
+          requester: friendId,
+        });
+        return SuccessServiceResult(result);
+      }
+
+      if (result.receipent.toString() === currentUserId) {
+        console.log("operation is true");
+        result = await friendshipmodel.updateOne(
+          {
+            _id: result._id,
+          },
+          {
+            $set: {
+              status: 2,
+            },
+          }
+        );
+      } else {
+        let oldReceipent = result.receipent;
+        result = await friendshipmodel.updateOne(
+          {
+            _id: result._id,
+          },
+          {
+            $set: {
+              receipent: currentUserId,
+              requester: oldReceipent,
+              status: 2,
+            },
+          }
+        );
+      }
+
+      return SuccessServiceResult(result);
+    } catch (error) {
+      return ErrorServiceResult(error);
+    }
+  },
+  unblock: async function (blockServiceParameter: UnblockServiceParameter) {
+    const { friendshipId, currentUserId } = blockServiceParameter;
+    let result: any;
+    try {
+      console.log(friendshipId, " - ff - ", currentUserId);
+      result = await friendshipmodel.findOne({
+        _id: friendshipId,
+      });
+      console.log(result);
+      if (result !== null && result.status === 4)
+        return ErrorServiceResult(
+          `There is a conflict concurrent request! try refresh! `
+        );
+
+      result = await friendshipmodel.updateOne(
+        {
+          _id: result._id,
+        },
+        {
+          $set: {
+            status: 4,
+          },
+        }
+      );
+
+      return SuccessServiceResult(result);
+    } catch (error) {
+      return ErrorServiceResult(error);
     }
   },
 };
