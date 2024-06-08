@@ -187,11 +187,6 @@ const friendshipController = {
                     status: 1,
                   },
                 },
-                // {
-                //   $addFields: {
-                //     countUnReadMessages: countUnReadMessage.length,
-                //   },
-                // },
               ],
             },
           },
@@ -410,6 +405,73 @@ const friendshipController = {
       res.status(404).json(ErrorResponse(error.message));
     }
   },
+  getBlockFriendList: async function (req: Request, res: Response) {
+    let result: any;
+    const { id: userId } = req.params;
+    console.log(userId);
+    try {
+      result = await friendshipmodel.aggregate([
+        {
+          $match: {
+            $or: [
+              {
+                receipent: new mongoose.Types.ObjectId(userId),
+                requester: {
+                  $ne: new mongoose.Types.ObjectId(userId),
+                },
+                status: 2,
+              },
+            ],
+          },
+        },
+        {
+          $addFields: {
+            friendId: {
+              $cond: {
+                if: {
+                  $eq: ["$receipent", new mongoose.Types.ObjectId(userId)],
+                },
+                then: "$requester",
+                else: "$receipent",
+              },
+            },
+          },
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "friendId",
+            foreignField: "_id",
+            as: "joined",
+            pipeline: [
+              {
+                $unset: ["_id", "email", "password", "phone", "createdAt"],
+              },
+            ],
+          },
+        },
+        {
+          $unwind: "$joined",
+        },
+        {
+          $addFields: {
+            name: "$joined.name",
+            profilePhoto: "$joined.profilePhoto",
+            friendshipId: "$_id",
+          },
+        },
+        {
+          $project: {
+            joined: 0,
+          },
+        },
+      ]);
+
+      res.status(200).json(result);
+    } catch (error) {
+      res.status(404).json(ErrorResponse("error in getting pending list!"));
+    }
+  },
   unfriend: async function (req: Request, res: Response) {
     const { friendId, userId } = req.body;
     try {
@@ -432,6 +494,39 @@ const friendshipController = {
       return res.status(200).json({ message: "successfully unfriended!" });
     } catch (error: any) {
       return res.status(404).json(ErrorResponse(error.message));
+    }
+  },
+  block: async function (req: Request, res: Response) {
+    const { friendshipId, currentUserId, friendId } = req.body;
+    try {
+      const result = await friendshipService.block({
+        friendshipId,
+        currentUserId,
+        friendId,
+      });
+
+      if (result.error)
+        return res.status(404).json(ErrorResponse(result.error.message));
+
+      return res.status(200).json({ message: "Blocked successfully!" });
+    } catch (error) {
+      res.status(404).json(ErrorResponse("error in block!"));
+    }
+  },
+  unblock: async function (req: Request, res: Response) {
+    const { friendshipId, currentUserId } = req.body;
+    try {
+      const result = await friendshipService.unblock({
+        friendshipId,
+        currentUserId,
+      });
+
+      if (result.error)
+        return res.status(404).json(ErrorResponse(result.error.message));
+
+      return res.status(200).json({ message: "Blocked successfully!" });
+    } catch (error) {
+      res.status(404).json(ErrorResponse("error in block!"));
     }
   },
 };

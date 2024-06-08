@@ -118,7 +118,7 @@ const messageService = {
       });
 
       if (result.type !== "text") {
-        await fs.unlink(storagePath + "/storage/chats/" + result.content);
+        await fs.rm(storagePath + "/storage/chats/" + result.content);
       }
 
       return SuccessServiceResult(result);

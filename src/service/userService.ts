@@ -109,6 +109,13 @@ export const userService = {
             joined: 0,
           },
         },
+        {
+          $match: {
+            status: {
+              $ne: 2,
+            },
+          },
+        },
       ]);
 
       return SuccessServiceResult(result);
