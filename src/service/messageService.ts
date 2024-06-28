@@ -36,16 +36,16 @@ const messageService = {
 
       if (checkFriendshipIsExisted) {
         const pass =
-          checkFriendshipIsExisted.receipent == currentUserId ||
-          checkFriendshipIsExisted.requester == currentUserId;
+          checkFriendshipIsExisted.receiverId == currentUserId ||
+          checkFriendshipIsExisted.initiatorId == currentUserId;
 
         if (pass === false)
           return ErrorServiceResult("you are not friend with this person!");
       } else return ErrorServiceResult("unauthorized message!");
 
       oldMessages = await messagemodel.find({
-        roomId: new mongoose.Types.ObjectId(roomId),
-        status: {
+        friendshipId: new mongoose.Types.ObjectId(roomId),
+        deliveryStatus: {
           $in: [0, 1],
         },
         receiverId: currentUserId,
@@ -54,12 +54,12 @@ const messageService = {
       if (oldMessages.length > 0) {
         await messagemodel.updateMany(
           {
-            roomId: new mongoose.Types.ObjectId(roomId),
+            friendshipId: new mongoose.Types.ObjectId(roomId),
             receiverId: currentUserId,
           },
           {
             $set: {
-              status: 2,
+              deliveryStatus: 2,
             },
           }
         );
@@ -69,14 +69,7 @@ const messageService = {
         .aggregate([
           {
             $match: {
-              roomId: new ObjectId(roomId),
-              // $or: [
-              //   {
-              //     roomId: new ObjectId(roomId),
-              //     // receiverId: currentUserId,
-              //     // senderId: friendId,
-              //   },
-              // ],
+              friendshipId: new mongoose.Types.ObjectId(roomId),
             },
           },
           {
@@ -85,13 +78,12 @@ const messageService = {
               messageId: "$_id",
               senderId: 1,
               receiverId: 1,
-              roomId: 1,
+              friendshipId: 1,
               content: 1,
               type: 1,
-              deletedBySender: 1,
-              deletedByReceiver: 1,
+              isDeletedByReceiver: 1,
               createdAt: 1,
-              status: 1,
+              deliveryStatus: 1,
             },
           },
           {
@@ -101,7 +93,6 @@ const messageService = {
           },
         ])
         .limit(20);
-
       return SuccessServiceResult(messages.reverse());
     } catch (error) {
       return ErrorServiceResult(error);
@@ -137,7 +128,7 @@ const messageService = {
           _id: messageId,
         },
         {
-          deletedByReceiver: true,
+          isDeletedByReceiver: true,
         }
       );
 

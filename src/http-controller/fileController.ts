@@ -5,6 +5,7 @@ import storagePath from "../storagePath";
 import multer, { MulterError } from "multer";
 import { ErrorResponse, SuccessResponse } from "../helper/helper";
 import usermodel from "../model/userModel";
+import profilePhotoModel from "../model/profilePhotoModel";
 
 const imageTypes = [
   "image/jpeg",
@@ -63,7 +64,7 @@ const fileController = {
                 path: file.filename,
                 mimetype: file.mimetype,
                 size: file.size,
-                createdAt: Date.now(),
+                createdAt: new Date(),
               },
             },
           },

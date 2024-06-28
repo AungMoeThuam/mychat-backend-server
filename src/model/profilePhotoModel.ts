@@ -10,20 +10,16 @@ import { mongoose } from "../config/dbConnection";
 //   path: 'D:\\projects\\mychatbackend\\src\\storage\\profile\\uploadPhoto-1706642558322-200500370-3.PNG',
 //   size: 176593
 // }
-const profilePhotoModel = new mongoose.Schema({
-  userId: {
-    ref: "users",
-    type: mongoose.Types.ObjectId,
-    require: true,
+const ProfilePhotoModel = new mongoose.Schema(
+  {
+    path: String,
+    mimetype: String,
+    size: Number,
   },
-  name: String,
-  mimetype: String,
-  size: Number,
-  createdAt: {
-    type: Date,
-    default: Date.now(),
-  },
-});
+  {
+    timestamps: true,
+  }
+);
 
-const ProfilePhotoModel = mongoose.model("profilePhotos", profilePhotoModel);
-export default ProfilePhotoModel;
+const profilePhotoModel = mongoose.model("profilePhotos", ProfilePhotoModel);
+export default profilePhotoModel;

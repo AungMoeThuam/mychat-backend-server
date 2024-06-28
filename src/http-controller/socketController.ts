@@ -5,6 +5,7 @@ import { getConversationList } from "../controller/messageController";
 import { friendshipService } from "../service/friendshipService";
 import friendshipmodel from "../model/friendshipModel";
 import messagemodel from "../model/messageModel";
+import { mongoose } from "../config/dbConnection";
 
 async function ioConnection(
   ioServer: socketio.Server,
@@ -14,7 +15,9 @@ async function ioConnection(
   ioServer.on("connection", (socket: Socket & extra) => {
     // offline or online status events
     socket.on("active", async ({ userId: id }) => {
-      const result = await getConversationList(id);
+      let result = await getConversationList(id);
+
+      result = result.map((user) => ({ friendId: user.friendId.toString() }));
 
       const newList = result
         .map((f) => {
@@ -26,7 +29,7 @@ async function ioConnection(
 
       const isThereAnyUnreadMessages = await messagemodel.find({
         receiverId: id,
-        status: 0,
+        deliveryStatus: 0,
       });
 
       if (isThereAnyUnreadMessages.length > 0) {
@@ -35,24 +38,22 @@ async function ioConnection(
             $or: [
               {
                 receiverId: id,
-                status: 0,
+                deliveryStatus: 0,
               },
               {
                 senderId: id,
-                status: 0,
+                deliveryStatus: 0,
               },
             ],
           },
           {
-            status: 1,
+            deliveryStatus: 1,
           }
         );
       }
 
       newList.map((item) => {
-        console.log(item.friendId.toString());
-
-        sockets.get(item.friendId.toString())?.forEach((sock) =>
+        sockets.get(item.friendId)?.forEach((sock) =>
           sock.emit(Events.MESSAGE_STATUS_DELIVERED, {
             friendId: id,
           })
@@ -81,30 +82,36 @@ async function ioConnection(
     //chating events
     socket.on("joinroom", async (data) => {
       const { roomId, userId, friendId } = data;
+      console.log("join-room ", data);
       socket.join(roomId);
 
       //getting unreadmessage count of the user who just joins the chat with his friend
       const unreadMessageCount = await messagemodel.find({
-        receiverId: userId,
-        status: {
+        friendshipId: new mongoose.Types.ObjectId(roomId),
+        receiverId: new mongoose.Types.ObjectId(userId),
+        deliveryStatus: {
           $in: [0, 1],
         },
       });
 
+      console.log(" seen ", unreadMessageCount);
       if (unreadMessageCount.length > 0) {
         //if there is a count of unread messages, then update all of them into seen status
         await messagemodel.updateMany(
           {
-            receiverId: userId,
-            status: {
+            friendshipId: new mongoose.Types.ObjectId(roomId),
+            receiverId: new mongoose.Types.ObjectId(userId),
+            deliveryStatus: {
               $in: [0, 1],
             },
           },
           {
-            status: 2,
+            deliveryStatus: 2,
           }
         );
 
+        console.log("sockets ", sockets);
+        console.log("there is a count ", sockets.get(friendId));
         //then emit the event to inform the friend that the unread message are now seen by the user who just joins the chat
         sockets
           .get(friendId)
@@ -114,7 +121,7 @@ async function ioConnection(
 
     socket.on("message", async (data, callback) => {
       const result = await friendshipService.checkFriendOrNot(
-        data.roomId,
+        data.friendshipId,
         data.receiverId,
         data.senderId
       );
@@ -131,14 +138,9 @@ async function ioConnection(
       if (activeSocketsOfUser && activeSocketsOfUser.length > 0) {
         isReceiverOffline = false;
         isInChat = activeSocketsOfUser.every((item) =>
-          item.rooms.has(data.roomId)
+          item.rooms.has(data.friendshipId)
         );
       }
-
-      // return socket.emit("error", {
-      //   status: "error",
-      //   message: "failed to send!",
-      // });
       let temporaryMessageId = data.temporaryMessageId;
       delete data.temporaryMessageId;
       let validateMessage = { ...data };
@@ -149,10 +151,16 @@ async function ioConnection(
         res = await messagemodel.create(validateMessage);
       } else if (isInChat) {
         //if the receipent user is using the chat with the sender, then status is seen
-        res = await messagemodel.create({ ...validateMessage, status: 2 });
+        res = await messagemodel.create({
+          ...validateMessage,
+          deliveryStatus: 2,
+        });
       } else {
         //if the receipent user is online but not using the chat with sender, the status is delivered
-        res = await messagemodel.create({ ...validateMessage, status: 1 });
+        res = await messagemodel.create({
+          ...validateMessage,
+          deliveryStatus: 1,
+        });
       }
 
       Promise.all([res]).then((value) => {
@@ -160,19 +168,18 @@ async function ioConnection(
         let newMsg = {
           senderId: msg.senderId,
           receiverId: msg.receiverId,
-          roomId: msg.roomId,
+          friendshipId: msg.friendshipId,
           content: msg.content,
           type: msg.type,
-          deletedBySender: msg.deletedBySender,
-          deletedByReceiver: msg.deletedByReceiver,
+          isDeletedByReceiver: msg.isDeletedByReceiver,
           createdAt: msg.createdAt,
           messageId: msg._id,
-          status: msg.status,
+          deliveryStatus: msg.deliveryStatus,
           temporaryMessageId,
         };
 
         //emit to users in the room
-        ioServer.to(data.roomId).emit(Events.MESSAGE, newMsg);
+        ioServer.to(data.friendshipId.toString()).emit(Events.MESSAGE, newMsg);
 
         // socket.emit("message-sending-status", {
         //   status: "success",

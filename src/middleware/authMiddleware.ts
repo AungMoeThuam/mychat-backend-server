@@ -4,7 +4,7 @@ import { ErrorResponse } from "../helper/helper";
 import jwt from "jsonwebtoken";
 
 function authMiddleware(req: CustomRequest, res: Response, next: NextFunction) {
-  console.log(req.url);
+  // console.log(req.url);
   if (req.url.includes("/api/videoplay")) return next();
   if (!req.headers.authorization)
     return res.status(401).json(ErrorResponse("Missing Authorization header!"));
@@ -15,7 +15,7 @@ function authMiddleware(req: CustomRequest, res: Response, next: NextFunction) {
 
   try {
     let decodedToken = jwt.verify(accessToken, process.env.SECRETKEY);
-    console.log("decoded ", decodedToken);
+    // console.log("decoded ", decodedToken);
     req.encodedToken = decodedToken as {
       _id: string;
       name: string;

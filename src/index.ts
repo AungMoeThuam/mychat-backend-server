@@ -60,9 +60,9 @@ app.use("/api", messageRoute);
 
 ioConnection(socketio, sockets, activeUserList);
 
-setInterval(() => {
-  console.log("active socket - ", sockets);
-  console.log("active user - ", activeUserList);
-}, 2000);
+// setInterval(() => {
+//   console.log("active socket - ", sockets);
+//   console.log("active user - ", activeUserList);
+// }, 2000);
 
 server.listen(4000, () => console.log("server is runing ...!"));

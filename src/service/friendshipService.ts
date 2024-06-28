@@ -9,11 +9,13 @@ import {
 interface FriendshipActionParameter {
   requesterId: string;
   receipentId: string;
+  friendshipId: string;
 }
 
 interface UnFriendActionParameter {
   friendId: string;
   userId: string;
+  friendshipId?: string;
 }
 
 interface BlockServiceParameter {
@@ -36,14 +38,6 @@ export const friendshipService = {
     try {
       let result = await friendshipmodel.findOne({
         _id: roomId,
-        $or: [
-          {
-            receipent: currentUserId,
-          },
-          {
-            requester: currentUserId,
-          },
-        ],
       });
 
       if (result == null || result.status !== 3) {
@@ -53,14 +47,19 @@ export const friendshipService = {
       }
 
       const isFriend =
-        result.receipent == currentUserId || result.requester == currentUserId;
+        result.receiverId == currentUserId ||
+        result.initiatorId == currentUserId;
 
       if (isFriend === false)
         return ErrorServiceResult("You are not friend with him!");
 
+      let friId =
+        result.receiverId == currentUserId
+          ? result.initiatorId
+          : result.receiverId;
       result = await usermodel.findOne(
         {
-          _id: friendId,
+          _id: friId,
         },
         { email: 0, password: 0, phone: 0, __v: 0 }
       );
@@ -72,19 +71,19 @@ export const friendshipService = {
   },
 
   request: async function (requestServiceParameter: FriendshipActionParameter) {
-    const { requesterId, receipentId } = requestServiceParameter;
+    const { requesterId, receipentId, friendshipId } = requestServiceParameter;
     let result: any;
 
     try {
       result = await friendshipmodel.findOne({
         $or: [
           {
-            requester: requesterId,
-            receipent: receipentId,
+            initiatorId: requesterId,
+            receiverId: receipentId,
           },
           {
-            requester: receipentId,
-            receipent: requesterId,
+            initiatorId: receipentId,
+            receiverId: requesterId,
           },
         ],
         status: { $in: [1, 4, 2] },
@@ -92,18 +91,17 @@ export const friendshipService = {
 
       if (result == null) {
         result = await friendshipmodel.create({
-          receipent: receipentId,
-          requester: requesterId,
+          receiverId: receipentId,
+          initiatorId: requesterId,
           status: 1,
-          version: Date.now(),
         });
       } else if (result.status === 1 || result.status === 2) {
         return ErrorServiceResult("cannot process the request at the moment!");
       } else {
         result = await friendshipmodel.updateOne(result, {
           $set: {
-            receipent: receipentId,
-            requester: requesterId,
+            receiverId: receipentId,
+            initiatorId: requesterId,
             status: 1,
           },
         });
@@ -115,12 +113,13 @@ export const friendshipService = {
     }
   },
   accept: async function (acceptServiceParameter: FriendshipActionParameter) {
-    const { receipentId, requesterId } = acceptServiceParameter;
+    const { receipentId, requesterId, friendshipId } = acceptServiceParameter;
     let result: any;
+
     try {
+      console.log(friendshipId);
       result = await friendshipmodel.findOne({
-        receipent: receipentId,
-        requester: requesterId,
+        _id: friendshipId,
         status: 1,
       });
       if (result === null) {
@@ -130,8 +129,7 @@ export const friendshipService = {
       }
       result = await friendshipmodel.updateOne(
         {
-          receipent: receipentId,
-          requester: requesterId,
+          _id: friendshipId,
         },
         {
           $set: {
@@ -146,39 +144,27 @@ export const friendshipService = {
     }
   },
   reject: async function (rejectServiceParameter: FriendshipActionParameter) {
-    const { requesterId, receipentId } = rejectServiceParameter;
+    const { requesterId, receipentId, friendshipId } = rejectServiceParameter;
     let result: any;
     try {
+      console.log(friendshipId);
       result = await friendshipmodel.findOne({
-        $or: [
-          {
-            receipent: receipentId,
-            requester: requesterId,
-            history: true,
-          },
-          {
-            receipent: receipentId,
-            requester: requesterId,
-            history: false,
-          },
-        ],
+        _id: friendshipId,
       });
-      console.log("reject - ", result);
+
       if (result == null || result.status === 3)
         return ErrorServiceResult(
           `There is b a conflict concurrent request! try refresh! `
         );
 
-      if (result.history !== true)
+      if (result.status !== 4)
         result = await friendshipmodel.deleteOne({
-          receipent: receipentId,
-          requester: requesterId,
+          _id: friendshipId,
         });
       else
         result = await friendshipmodel.updateOne(
           {
-            receipent: receipentId,
-            requester: requesterId,
+            _id: friendshipId,
           },
           {
             $set: {
@@ -193,16 +179,12 @@ export const friendshipService = {
     }
   },
   unfriend: async function (unfriendServiceParameter: UnFriendActionParameter) {
-    const { friendId, userId } = unfriendServiceParameter;
+    const { friendId, userId, friendshipId } = unfriendServiceParameter;
     let result: any;
-    console.log(friendId, " - ", userId);
     try {
       result = await friendshipmodel.findOne({
         status: 3,
-        $or: [
-          { receipent: userId, requester: friendId },
-          { receipent: friendId, requester: userId },
-        ],
+        _id: friendshipId,
       });
       if (result === null) {
         return ErrorServiceResult(
@@ -211,15 +193,11 @@ export const friendshipService = {
       }
       result = await friendshipmodel.updateOne(
         {
-          $or: [
-            { receipent: userId, requester: friendId },
-            { receipent: friendId, requester: userId },
-          ],
+          _id: friendshipId,
         },
         {
           $set: {
             status: 4,
-            history: true,
           },
         }
       );
@@ -233,17 +211,10 @@ export const friendshipService = {
     const { friendshipId, currentUserId, friendId } = blockServiceParameter;
     let result: any;
     try {
-      console.log(friendId, " - ff - ", currentUserId);
       result = await friendshipmodel.findOne({
         _id: friendshipId,
       });
 
-      console.log(result);
-      console.log(
-        "operation is true ",
-        result?.receipent ==
-          new mongoose.Types.ObjectId(currentUserId).toString()
-      );
       if (result !== null && result.status === 2)
         return ErrorServiceResult(
           `There is b a conflict concurrent request! try refresh! `
@@ -251,15 +222,14 @@ export const friendshipService = {
 
       if (!result) {
         result = await friendshipmodel.create({
-          receipent: currentUserId,
+          receiverId: currentUserId,
           status: 2,
-          requester: friendId,
+          initiatorId: friendId,
         });
         return SuccessServiceResult(result);
       }
 
-      if (result.receipent.toString() === currentUserId) {
-        console.log("operation is true");
+      if (result.receiverId.toString() === currentUserId) {
         result = await friendshipmodel.updateOne(
           {
             _id: result._id,
@@ -271,15 +241,15 @@ export const friendshipService = {
           }
         );
       } else {
-        let oldReceipent = result.receipent;
+        let oldReceipent = result.receiverId;
         result = await friendshipmodel.updateOne(
           {
             _id: result._id,
           },
           {
             $set: {
-              receipent: currentUserId,
-              requester: oldReceipent,
+              receiverId: currentUserId,
+              initiatorId: oldReceipent,
               status: 2,
             },
           }
@@ -295,11 +265,9 @@ export const friendshipService = {
     const { friendshipId, currentUserId } = blockServiceParameter;
     let result: any;
     try {
-      console.log(friendshipId, " - ff - ", currentUserId);
       result = await friendshipmodel.findOne({
         _id: friendshipId,
       });
-      console.log(result);
       if (result !== null && result.status === 4)
         return ErrorServiceResult(
           `There is a conflict concurrent request! try refresh! `
