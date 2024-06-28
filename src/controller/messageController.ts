@@ -2,83 +2,81 @@ import { mongoose } from "../config/dbConnection";
 import friendshipmodel from "../model/friendshipModel";
 
 export async function getConversationList(id: string) {
-  const result = await friendshipmodel
-    .aggregate([
-      {
-        $match: {
-          $or: [
-            {
-              receipent: new mongoose.Types.ObjectId(id),
-              status: 3,
-            },
-            {
-              requester: new mongoose.Types.ObjectId(id),
-              status: 3,
-            },
-          ],
-        },
+  const result = await friendshipmodel.aggregate([
+    {
+      $match: {
+        $or: [
+          {
+            receiverId: new mongoose.Types.ObjectId(id),
+            status: 3,
+          },
+          {
+            initiatorId: new mongoose.Types.ObjectId(id),
+            status: 3,
+          },
+        ],
       },
-      {
-        $addFields: {
-          friendId: {
-            $cond: {
-              if: {
-                $eq: ["$receipent", new mongoose.Types.ObjectId(id)],
-              },
-              then: "$requester",
-              else: "$receipent",
+    },
+    {
+      $addFields: {
+        friendId: {
+          $cond: {
+            if: {
+              $eq: ["$receiverId", new mongoose.Types.ObjectId(id)],
             },
+            then: "$initiatorId",
+            else: "$receiverId",
           },
         },
       },
-      {
-        $lookup: {
-          from: "users",
-          localField: "friendId",
-          foreignField: "_id",
-          as: "joined",
-          pipeline: [
-            {
-              $unset: ["_id", "email", "password", "phone", "createdAt"],
-            },
-          ],
-        },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "friendId",
+        foreignField: "_id",
+        as: "joined",
+        pipeline: [
+          {
+            $unset: ["_id", "email", "password", "phone", "createdAt"],
+          },
+        ],
       },
-      {
-        $unwind: "$joined",
+    },
+    {
+      $unwind: "$joined",
+    },
+    {
+      $addFields: {
+        friendshipId: "$_id",
+        name: "$joined.name",
+        profilePhoto: "$joined.profilePhoto",
       },
-      {
-        $addFields: {
-          roomId: "$_id",
-          name: "$joined.name",
-          profilePhoto: "$joined.profilePhoto",
-        },
+    },
+    {
+      $project: {
+        joined: 0,
+        __v: 0,
+        latestInteractedAt: 0,
+        createdAt: 0,
       },
-      {
-        $project: {
-          joined: 0,
-          __v: 0,
-          latestInteractedAt: 0,
-          createdAt: 0,
-        },
+    },
+    {
+      $unwind: {
+        path: "$joined",
+        preserveNullAndEmptyArrays: true,
       },
-      {
-        $unwind: {
-          path: "$joined",
-          preserveNullAndEmptyArrays: true,
-        },
+    },
+    {
+      $project: {
+        _id: 0,
+        friendId: 1,
       },
-      {
-        $project: {
-          _id: 0,
-          friendId: 1,
-        },
-      },
-      {
-        $unset: "joined",
-      },
-    ])
-    .sort({ latestInteractedAt: -1 });
+    },
+    {
+      $unset: "joined",
+    },
+  ]);
 
   return result;
 }

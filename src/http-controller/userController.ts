@@ -115,6 +115,43 @@ const userController = {
       return res.status(500).json(ErrorResponse(error.message));
     }
   },
+  updateUsername: async function (req: Request, res: Response) {
+    try {
+      const { userId, newUsername } = req.body;
+      const { data, error } = await userService.changeUsername({
+        userId,
+        newUsername,
+      });
+
+      if (error) return res.status(404).json(ErrorResponse(error.message));
+
+      return res.status(200).json({
+        _id: data._id,
+        name: data.name,
+      });
+    } catch (error) {
+      return res.status(500).json(ErrorResponse(error.message));
+    }
+  },
+  updatePassword: async function (req: Request, res: Response) {
+    try {
+      const { userId, oldPassword, newPassword } = req.body;
+      const { data, error } = await userService.changePassword({
+        userId,
+        oldPassword,
+        newPassword,
+      });
+
+      if (error) return res.status(404).json(ErrorResponse(error.message));
+
+      return res.status(200).json({
+        _id: data._id,
+        name: data.name,
+      });
+    } catch (error) {
+      return res.status(500).json(ErrorResponse(error.message));
+    }
+  },
 };
 
 export default userController;

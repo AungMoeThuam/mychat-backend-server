@@ -2,23 +2,25 @@ import { mongoose } from "../config/dbConnection";
 
 const messageModel = new mongoose.Schema(
   {
-    senderId: String,
-    receiverId: String,
-    roomId: {
+    senderId: {
+      type: mongoose.Types.ObjectId,
+      ref: "users",
+    },
+    receiverId: {
+      type: mongoose.Types.ObjectId,
+      ref: "users",
+    },
+    friendshipId: {
       ref: "friendships",
       type: mongoose.Types.ObjectId,
     },
     content: String,
     type: String,
-    deletedBySender: {
+    isDeletedByReceiver: {
       type: Boolean,
       default: false,
     },
-    deletedByReceiver: {
-      type: Boolean,
-      default: false,
-    },
-    status: {
+    deliveryStatus: {
       type: Number,
       default: 0,
     }, // 0 SENT //1 DELIEVERED //2 SEEN
