@@ -152,6 +152,26 @@ const userController = {
       return res.status(500).json(ErrorResponse(error.message));
     }
   },
+  updateEmail: async function (req: Request, res: Response) {
+    try {
+      const { userId, password, newEmail, oldEmail } = req.body;
+      const { data, error } = await userService.changeEmail({
+        userId,
+        newEmail,
+        oldEmail,
+        password,
+      });
+
+      if (error) return res.status(404).json(ErrorResponse(error.message));
+
+      return res.status(200).json({
+        _id: data._id,
+        email: data.email,
+      });
+    } catch (error) {
+      return res.status(500).json(ErrorResponse(error.message));
+    }
+  },
 };
 
 export default userController;

@@ -229,10 +229,13 @@ export const userService = {
     oldEmail: string;
     newEmail: string;
     userId: string;
+    password: string;
   }) {
     try {
-      const { oldEmail, newEmail, userId } = changeEmailInfo;
+      const { oldEmail, newEmail, userId, password } = changeEmailInfo;
       let result: any;
+      result = await usermodel.findOne({ email: oldEmail, password });
+      if (!result) return ErrorServiceResult("Information incorrect!");
 
       result = await usermodel.findOneAndUpdate(
         {
