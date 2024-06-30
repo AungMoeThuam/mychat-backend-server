@@ -143,6 +143,7 @@ export const userService = {
 
       return SuccessServiceResult(result);
     } catch (error: unknown) {
+      console.log(error)
       if (error instanceof Error && error.name === "MongoServerError")
         return ErrorServiceResult("Email is already registered!");
       return ErrorServiceResult(error);
