@@ -72,10 +72,10 @@ const fileController = {
             new: true,
           }
         );
-
-        await fsPromise.rm(
-          storagePath + "/storage/profiles/" + oldResult.profilePhoto.path
-        );
+        if (oldResult.profilePhoto)
+          await fsPromise.rm(
+            storagePath + "/storage/profiles/" + oldResult.profilePhoto.path
+          );
 
         return res.status(200).json(result);
       } catch (error) {
@@ -115,7 +115,7 @@ const fileController = {
       res.writeHead(206, headers);
       const videoStream = fs.createReadStream(videoPath, { start, end });
       videoStream.pipe(res);
-    } catch (error) {}
+    } catch (error) { }
   },
 };
 
