@@ -13,6 +13,7 @@ import messageRoute from "./route/messageRoute";
 import cookieParser from "cookie-parser";
 import { authMiddleware } from "./middleware/authMiddleware";
 import authRoute from "./route/authRoute";
+import compression from "compression";
 dotenv.config();
 
 const app = express();
@@ -24,6 +25,14 @@ const socketio = new Server(server, {
     credentials: true,
   },
 });
+// app.use(compression({ level: 9, threshold: 0 }));
+// app.use(
+//   compression({
+//     filter: function () {
+//       return true;
+//     },
+//   })
+// );
 app.use(
   cors({
     origin: "*",

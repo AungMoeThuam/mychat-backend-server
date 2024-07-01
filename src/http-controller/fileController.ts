@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
-import fs from "fs";
+import fs, { rmSync } from "fs";
 import fsPromise from "fs/promises";
 import storagePath from "../storagePath";
 import multer, { MulterError } from "multer";
 import { ErrorResponse, SuccessResponse } from "../helper/helper";
 import usermodel from "../model/userModel";
 import profilePhotoModel from "../model/profilePhotoModel";
-
+import Ffmpeg from "fluent-ffmpeg";
+import { Worker } from "worker_threads";
 const imageTypes = [
   "image/jpeg",
   "image/png",
@@ -84,12 +85,61 @@ const fileController = {
     });
   },
   uploadFile: async function (req: Request, res: Response) {
+    // const fileName = req.headers["x-filename"];
+    // const isVideoFormatMp4 = fileName.toString().split(".")[1] === "mp4";
+
     const wr = fs.createWriteStream(
-      storagePath + "/storage/chats/" + req.headers["x-filename"]
+      `${storagePath}/storage/temp/${req.headers["x-filename"]}`
+      // `${storagePath}/storage/chats/${req.headers["x-filename"]}`
     );
     req.pipe(wr).on("finish", () => {
-      return res.status(200).json({ status: "success" });
+      let worker = new Worker(
+        storagePath + "/worker-threads/fileCompressingWorker.ts",
+        {
+          workerData: {
+            fileName: req.headers["x-filename"],
+          },
+        }
+      );
+
+      worker.on("message", (value) => {
+        console.log(value);
+        if (value === true) return res.status(200).json({ status: "success" });
+        console.log("false is the best");
+        fs.unlink(
+          `${storagePath}/storage/temp/${req.headers["x-filename"]}`,
+          () => res.status(404).json({ error: "error in file upload!" })
+        );
+      });
+      worker.on("error", (err) => {
+        console.log("err in worker", err);
+        return fs.unlink(
+          `${storagePath}/storage/temp/${req.headers["x-filename"]}`,
+          () => res.status(404).json({ error: "error in file upload!" })
+        );
+      });
     });
+
+    // req.pipe(wr).on("finish", () => {
+    //   Ffmpeg(`${storagePath}/storage/temp/${req.headers["x-filename"]}`)
+    //     .outputOptions([
+    //       "-codec:v libx264",
+    //       "-crf 28", // Adjust the CRF value as needed (lower is better quality, higher is more compressed)
+    //       "-preset fast", // Optional: Adjust the preset for speed vs. compression ratio
+    //     ])
+    //     .on("end", () => {
+    //       console.log("Compression finished");
+    //       return res.status(200).json({ status: "success" });
+    //       // Here you can handle the completion of compression
+    //     })
+    //     .on("error", (err, stdout, stderr) => {
+    //       console.error("Error:", err.message);
+    //       console.error("ffmpeg stdout:", stdout);
+    //       console.error("ffmpeg stderr:", stderr);
+    //       // Handle error while compressing
+    //     })
+    //     .save(`${storagePath}/storage/chats/${req.headers["x-filename"]}`);
+    // });
   },
 
   serveFile: async function (req: Request, res: Response) {
@@ -110,12 +160,13 @@ const fileController = {
         "Content-Range": `bytes ${start}-${end}/${videoSize}`,
         "Accept-Ranges": "bytes",
         "Content-Length": contentLength,
-        "Content-Type": "video/mp4",
+        // "Content-Type": "video/mp4",
+        "Content-Type": "video/quicktime",
       };
       res.writeHead(206, headers);
       const videoStream = fs.createReadStream(videoPath, { start, end });
       videoStream.pipe(res);
-    } catch (error) { }
+    } catch (error) {}
   },
 };
 

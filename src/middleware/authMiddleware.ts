@@ -5,7 +5,12 @@ import jwt from "jsonwebtoken";
 
 function authMiddleware(req: CustomRequest, res: Response, next: NextFunction) {
   // console.log(req.url);
-  if (req.url.includes("/api/videoplay")) return next();
+  if (
+    req.url.includes("/api/videoplay") ||
+    req.url.includes("/api/resources/chats/")
+  )
+    return next();
+
   if (!req.headers.authorization)
     return res.status(401).json(ErrorResponse("Missing Authorization header!"));
 
