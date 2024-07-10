@@ -119,6 +119,30 @@ async function ioConnection(
       }
     });
 
+    socket.on("call", (data) => {
+      const { callerId, calleeId, offer } = data;
+      sockets?.get(calleeId)?.forEach((e) =>
+        e.emit("call", {
+          calleeId,
+          callerId,
+          offer,
+        })
+      );
+    });
+
+    socket.on("answer", (data) => {
+      console.log(data);
+
+      const { callerId, calleeId, answer } = data;
+      sockets?.get(callerId)?.forEach((e) => e.emit("answer", data));
+    });
+    socket.on("exchange-candidate", (data) => {
+      const { sdp, targetUserId } = data;
+      sockets
+        .get(targetUserId)
+        ?.forEach((e) => socket.emit("exchange-candidate", data));
+    });
+
     socket.on("message", async (data, callback) => {
       const result = await friendshipService.checkFriendOrNot(
         data.friendshipId,
