@@ -120,12 +120,13 @@ async function ioConnection(
     });
 
     socket.on("call", (data) => {
-      const { callerId, calleeId, offer } = data;
+      const { callerId, calleeId, offer, type } = data;
       sockets?.get(calleeId)?.forEach((e) =>
         e.emit("call", {
           calleeId,
           callerId,
           offer,
+          type,
         })
       );
     });
@@ -141,6 +142,16 @@ async function ioConnection(
       sockets
         .get(targetUserId)
         ?.forEach((e) => socket.emit("exchange-candidate", data));
+    });
+
+    socket.on("turn-off-video", (data) => {
+      const { targetUserId } = data;
+      sockets.get(targetUserId)?.forEach((e) => e.emit("turn-off-video"));
+    });
+
+    socket.on("turn-on-video", (data) => {
+      const { targetUserId } = data;
+      sockets.get(targetUserId)?.forEach((e) => e.emit("turn-on-video"));
     });
 
     socket.on("message", async (data, callback) => {

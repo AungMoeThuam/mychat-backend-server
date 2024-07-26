@@ -51,7 +51,7 @@ app.use("/resources/profiles", express.static(__dirname + "/storage/profiles"));
 db();
 
 app.get("/server", (req, res) => {
-  res.status(200).json({ message: "server is running!" });
+  return res.status(200).json({ message: "server is running!" });
 });
 
 app.post("/api", async (req, res) => {
