@@ -132,16 +132,17 @@ async function ioConnection(
     });
 
     socket.on("answer", (data) => {
-      console.log(data);
-
       const { callerId, calleeId, answer } = data;
       sockets?.get(callerId)?.forEach((e) => e.emit("answer", data));
     });
-    socket.on("exchange-candidate", (data) => {
-      const { sdp, targetUserId } = data;
-      sockets
-        .get(targetUserId)
-        ?.forEach((e) => socket.emit("exchange-candidate", data));
+
+    socket.on("end-call", ({ targetUserId }) => {
+      sockets?.get(targetUserId)?.forEach((e) => e.emit("end-call"));
+    });
+
+    socket.on("candidate", (data) => {
+      const { targetUserId } = data;
+      sockets.get(targetUserId)?.forEach((e) => socket.emit("candidate", data));
     });
 
     socket.on("turn-off-video", (data) => {
