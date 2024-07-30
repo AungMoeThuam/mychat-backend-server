@@ -18,7 +18,7 @@ interface User {
 const userController = {
   registerUser: async function (req: Request, res: Response) {
     try {
-      console.log(req.body)
+      console.log(req.body);
       let validate = true;
       if (Object.keys(req.body).length === 0) {
         validate = false;
@@ -47,10 +47,11 @@ const userController = {
         token,
         currentUserId: data._id,
         profilePhoto: data.profilePhoto,
+        username: data.name,
       });
     } catch (error) {
       console.log(error);
-      
+
       return res.status(500).json(ErrorResponse("Server error!"));
     }
   },
@@ -75,6 +76,7 @@ const userController = {
         token,
         currentUserId: data._id,
         profilePhoto: data.profilePhoto,
+        username: data.name,
       });
     } catch (error) {
       return res.status(500).json(ErrorResponse(error.message));
