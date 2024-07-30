@@ -120,19 +120,12 @@ async function ioConnection(
     });
 
     socket.on("call", (data) => {
-      const { callerId, calleeId, offer, type } = data;
-      sockets?.get(calleeId)?.forEach((e) =>
-        e.emit("call", {
-          calleeId,
-          callerId,
-          offer,
-          type,
-        })
-      );
+      const { calleeId } = data;
+      sockets?.get(calleeId)?.forEach((e) => e.emit("call", data));
     });
 
     socket.on("answer", (data) => {
-      const { callerId, calleeId, answer } = data;
+      const { callerId } = data;
       sockets?.get(callerId)?.forEach((e) => e.emit("answer", data));
     });
 
