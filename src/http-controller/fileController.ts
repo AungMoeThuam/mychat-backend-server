@@ -6,6 +6,7 @@ import multer, { MulterError } from "multer";
 import { ErrorResponse, SuccessResponse } from "../helper/helper";
 import usermodel from "../model/userModel";
 import { Worker } from "worker_threads";
+import path from "path";
 const imageTypes = [
   "image/jpeg",
   "image/png",
@@ -83,8 +84,13 @@ const fileController = {
     });
   },
   uploadFile: async function (req: Request, res: Response) {
-    let fileName = req.headers["x-filename"];
-    let isImageFile = fileName.toString().split(".")[1] !== "mp4";
+    let fileName = req.headers["x-filename"].toString();
+    let extension = path.extname(fileName);
+
+    console.log(extension);
+
+    let isImageFile = extension !== ".mp4";
+    console.log(isImageFile);
     const wr = isImageFile
       ? fs.createWriteStream(
           `${storagePath}/storage/chats/${req.headers["x-filename"]}`
