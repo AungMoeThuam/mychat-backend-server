@@ -14,6 +14,7 @@ type getMessagesParameter = {
   roomId: string;
   currentUserId: string;
   friendId: string;
+  lastMessageId?: string;
 };
 
 type DeleteMessageParameter = {
@@ -93,6 +94,103 @@ const messageService = {
           },
         ])
         .limit(20);
+      return SuccessServiceResult(messages.reverse());
+    } catch (error) {
+      return ErrorServiceResult(error);
+    }
+  },
+  getMessagesByPagination: async function (parameter: getMessagesParameter) {
+    try {
+      const { roomId, currentUserId, friendId, lastMessageId } = parameter;
+      let messages: any[] = [];
+      let unReadMessages: any[] = [];
+
+      const checkFriendshipIsExisted = await friendshipmodel.findOne({
+        _id: new mongoose.Types.ObjectId(roomId),
+      });
+
+      if (checkFriendshipIsExisted) {
+        const pass =
+          checkFriendshipIsExisted.receiverId == currentUserId ||
+          checkFriendshipIsExisted.initiatorId == currentUserId;
+
+        if (pass === false)
+          return ErrorServiceResult("you are not friend with this person!");
+      } else return ErrorServiceResult("unauthorized message!");
+
+      unReadMessages = await messagemodel.find({
+        friendshipId: new mongoose.Types.ObjectId(roomId),
+        deliveryStatus: {
+          $in: [0, 1],
+        },
+        receiverId: currentUserId,
+      });
+
+      if (unReadMessages.length > 0) {
+        await messagemodel.updateMany(
+          {
+            friendshipId: new mongoose.Types.ObjectId(roomId),
+            receiverId: currentUserId,
+          },
+          {
+            $set: {
+              deliveryStatus: 2,
+            },
+          }
+        );
+      }
+
+      const startPage =
+        lastMessageId === ""
+          ? [
+              {
+                $match: {
+                  friendshipId: new mongoose.Types.ObjectId(roomId),
+                },
+              },
+            ]
+          : [
+              {
+                $match: {
+                  _id: {
+                    $lt: new mongoose.Types.ObjectId(lastMessageId),
+                  },
+                },
+              },
+              {
+                $match: {
+                  friendshipId: new mongoose.Types.ObjectId(roomId),
+                },
+              },
+            ];
+
+      messages = await messagemodel.aggregate([
+        ...startPage,
+
+        {
+          $project: {
+            _id: 0,
+            messageId: "$_id",
+            senderId: 1,
+            receiverId: 1,
+            friendshipId: 1,
+            content: 1,
+            type: 1,
+            isDeletedByReceiver: 1,
+            createdAt: 1,
+            deliveryStatus: 1,
+          },
+        },
+        {
+          $sort: {
+            messageId: -1,
+          },
+        },
+        {
+          $limit: 20,
+        },
+      ]);
+
       return SuccessServiceResult(messages.reverse());
     } catch (error) {
       return ErrorServiceResult(error);

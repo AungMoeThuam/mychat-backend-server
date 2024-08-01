@@ -87,7 +87,22 @@ const messageController = {
       return res.status(404).json(ErrorResponse(error));
     }
   },
-  getMessagesByPagination: async function (req: Request, res: Response) {},
+  getMessagesByPagination: async function (req: Request, res: Response) {
+    try {
+      const { roomId, currentUserId, friendId, lastMessageId } = req.body;
+      const { data, error } = await messageService.getMessagesByPagination({
+        roomId,
+        currentUserId,
+        friendId,
+        lastMessageId,
+      });
+      if (error) return res.status(404).send(error);
+      // return res.status(200).send({ data, lastMessageId: data[0].messageId });
+      return res.status(200).send(data);
+    } catch (error) {
+      return res.status(500).json(ErrorResponse("Internal server error!"));
+    }
+  },
 };
 
 export default messageController;
