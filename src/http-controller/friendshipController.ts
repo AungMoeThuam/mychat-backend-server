@@ -275,8 +275,11 @@ const friendshipController = {
               pipeline: [
                 {
                   $match: {
-                    status: {
+                    deliveryStatus: {
                       $in: [0, 1],
+                    },
+                    senderId: {
+                      $ne: new mongoose.Types.ObjectId(userId),
                     },
                   },
                 },
