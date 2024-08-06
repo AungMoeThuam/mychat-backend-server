@@ -1,10 +1,10 @@
 import fs from "fs/promises";
-import storagePath from "../storagePath";
 import { ErrorServiceResult } from "../utils/serviceResult";
+import { fileStoragePath } from "../utils/fileStoragePath";
 export const fileService = {
   deleteMessageMediaFile: async function (mediaFileNameToBeDeleted: string) {
     try {
-      await fs.rm(storagePath + "/storage/chats/" + mediaFileNameToBeDeleted);
+      await fs.rm(fileStoragePath + "/chats/" + mediaFileNameToBeDeleted);
     } catch (error) {
       return ErrorServiceResult(error);
     }
