@@ -5,3 +5,6 @@
 /src/storage/profiles/*
 /src/storage/temp/*
 
+#mac os
+.DS_Store
+
