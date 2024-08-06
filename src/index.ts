@@ -57,5 +57,11 @@ app.use("/api", fileRoute);
 app.use("/api", messageRoute);
 
 ioConnection(socketio, sockets, activeUserList);
+console.log(process.env.HOST);
 
-server.listen(process.env.PORT, () => console.log("server is runing ...!"));
+const port = parseInt(process.env.PORT || "4100", 10); // Default to 4100 if PORT is not set
+const host = process.env.HOST || "0.0.0.0"; // Default to 0.0.0.0 if HOST is not set
+
+server.listen(port, host, () => {
+  console.log(`Server is running on http://${host}:${port}`);
+});
