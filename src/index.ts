@@ -14,6 +14,7 @@ import cookieParser from "cookie-parser";
 import { authMiddleware } from "./middleware/authMiddleware";
 import authRoute from "./route/authRoute";
 import { fileStoragePath } from "./utils/fileStoragePath";
+import setupStorageFolder from "./config/setupFileStorageFolder";
 dotenv.config();
 
 const app = express();
@@ -39,17 +40,17 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 db();
-
+setupStorageFolder();
 app.use("/resources/chats", express.static(fileStoragePath + "/chats/"));
 app.use("/resources/profiles", express.static(fileStoragePath + "/profiles/"));
 
 app.get("/server", (req, res) =>
   res.status(200).json({ message: "server is running!" })
 );
+app.use("/api", authRoute);
 
 app.use(authMiddleware); //middleware to check authorization of already login user
 
-app.use("/api", authRoute);
 app.use("/api", userRoute);
 app.use("/api", friendRoute);
 app.use("/api", fileRoute);
