@@ -6,9 +6,9 @@ import {
   SuccessServiceResult,
 } from "../utils/serviceResult";
 import fs from "fs/promises";
-import storagePath from "../storagePath";
 import friendshipmodel from "../model/friendshipModel";
 import messagemodel from "../model/messageModel";
+import { fileStoragePath } from "../utils/fileStoragePath";
 
 type getMessagesParameter = {
   roomId: string;
@@ -207,7 +207,7 @@ const messageService = {
       });
 
       if (result.type !== "text") {
-        await fs.rm(storagePath + "/storage/chats/" + result.content);
+        await fs.rm(fileStoragePath + "/chats/" + result.content);
       }
 
       return SuccessServiceResult(result);

@@ -3,9 +3,11 @@ import {
   SuccessResponse,
   ErrorResponse,
   HttpErrorResponse,
-} from "../helper/helper";
+} from "../utils/helper";
 import jwt from "jsonwebtoken";
 import { userService } from "../service/userService";
+import friendshipmodel from "../model/friendshipModel";
+import { mongoose } from "../config/dbConnection";
 
 interface User {
   firstName: String;
@@ -176,6 +178,84 @@ const userController = {
     } catch (error) {
       return res.status(500).json(ErrorResponse(error.message));
     }
+  },
+  getConversationList: async function (id: string) {
+    const result = await friendshipmodel.aggregate([
+      {
+        $match: {
+          $or: [
+            {
+              receiverId: new mongoose.Types.ObjectId(id),
+              status: 3,
+            },
+            {
+              initiatorId: new mongoose.Types.ObjectId(id),
+              status: 3,
+            },
+          ],
+        },
+      },
+      {
+        $addFields: {
+          friendId: {
+            $cond: {
+              if: {
+                $eq: ["$receiverId", new mongoose.Types.ObjectId(id)],
+              },
+              then: "$initiatorId",
+              else: "$receiverId",
+            },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "friendId",
+          foreignField: "_id",
+          as: "joined",
+          pipeline: [
+            {
+              $unset: ["_id", "email", "password", "phone", "createdAt"],
+            },
+          ],
+        },
+      },
+      {
+        $unwind: "$joined",
+      },
+      {
+        $addFields: {
+          friendshipId: "$_id",
+          name: "$joined.name",
+          profilePhoto: "$joined.profilePhoto",
+        },
+      },
+      {
+        $project: {
+          joined: 0,
+          __v: 0,
+          latestInteractedAt: 0,
+          createdAt: 0,
+        },
+      },
+      {
+        $unwind: {
+          path: "$joined",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          friendId: 1,
+        },
+      },
+      {
+        $unset: "joined",
+      },
+    ]);
+    return result;
   },
 };
 

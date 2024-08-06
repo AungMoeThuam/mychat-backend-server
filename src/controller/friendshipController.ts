@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
-import { ErrorResponse, SuccessResponse } from "../helper/helper";
-import { activeUserList, sockets } from "../store";
+import { ErrorResponse, SuccessResponse } from "../utils/helper";
+import { activeUserList, sockets } from "../utils/store";
 import { CustomRequest } from "../utils/types";
 import { mongoose } from "../config/dbConnection";
 import { friendshipService } from "../service/friendshipService";

@@ -1,9 +1,9 @@
 /dist
 /node_modules
 .env
-/src/storage/chats/*
-/src/storage/profiles/*
-/src/storage/temp/*
+/storage/chats/*
+/storage/profiles/*
+/storage/temp/*
 
 #mac os
 .DS_Store

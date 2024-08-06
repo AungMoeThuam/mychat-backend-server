@@ -2,13 +2,10 @@ const { parentPort, workerData } = require("worker_threads");
 const fs = require("fs");
 const Ffmpeg = require("fluent-ffmpeg");
 const path = require("path");
-const { storagePaths } = require("../spath.ts");
-console.log(__dirname);
-console.log(storagePaths);
-let { fileName } = workerData;
-console.log(" file name - ", fileName);
 
-Ffmpeg(`${storagePaths}/storage/temp/${fileName}`)
+let { fileName } = workerData;
+let p = path.join(__dirname, "../../", "storage/temp/", fileName);
+Ffmpeg(p)
   .outputOptions([
     "-codec:v libx264",
     "-crf 28", // Adjust the CRF value as needed (lower is better quality, higher is more compressed)
@@ -25,4 +22,4 @@ Ffmpeg(`${storagePaths}/storage/temp/${fileName}`)
     parentPort.postMessage(false);
     // Handle error while compressing
   })
-  .save(`${storagePaths}/storage/chats/${fileName}`);
+  .save(path.join(__dirname, "../../", "storage/chats/", fileName));

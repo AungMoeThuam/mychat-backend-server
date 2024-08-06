@@ -1,11 +1,11 @@
 import socketio, { Socket } from "socket.io";
-import { extra } from "../store";
+import { extra } from "../utils/store";
 import Events from "../utils/events";
-import { getConversationList } from "../controller/messageController";
 import { friendshipService } from "../service/friendshipService";
 import friendshipmodel from "../model/friendshipModel";
 import messagemodel from "../model/messageModel";
 import { mongoose } from "../config/dbConnection";
+import userController from "./userController";
 
 async function ioConnection(
   ioServer: socketio.Server,
@@ -15,7 +15,7 @@ async function ioConnection(
   ioServer.on("connection", (socket: Socket & extra) => {
     // offline or online status events
     socket.on("active", async ({ userId: id }) => {
-      let result = await getConversationList(id);
+      let result = await userController.getConversationList(id);
 
       result = result.map((user) => ({ friendId: user.friendId.toString() }));
 
@@ -133,11 +133,6 @@ async function ioConnection(
       sockets?.get(targetUserId)?.forEach((e) => e.emit("end-call"));
     });
 
-    socket.on("candidate", (data) => {
-      const { targetUserId } = data;
-      sockets.get(targetUserId)?.forEach((e) => socket.emit("candidate", data));
-    });
-
     socket.on("turn-off-video", (data) => {
       const { targetUserId } = data;
       sockets.get(targetUserId)?.forEach((e) => e.emit("turn-off-video"));
@@ -148,7 +143,7 @@ async function ioConnection(
       sockets.get(targetUserId)?.forEach((e) => e.emit("turn-on-video"));
     });
 
-    socket.on("message", async (data, callback) => {
+    socket.on("message", async (data) => {
       const result = await friendshipService.checkFriendOrNot(
         data.friendshipId,
         data.receiverId,

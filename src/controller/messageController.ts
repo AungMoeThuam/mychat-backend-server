@@ -1,82 +1,108 @@
-import { mongoose } from "../config/dbConnection";
-import friendshipmodel from "../model/friendshipModel";
+import { ErrorResponse, SuccessResponse } from "../utils/helper";
+import { Request, Response } from "express";
+import { sockets } from "../utils/store";
+import messageService from "../service/messageService";
 
-export async function getConversationList(id: string) {
-  const result = await friendshipmodel.aggregate([
-    {
-      $match: {
-        $or: [
-          {
-            receiverId: new mongoose.Types.ObjectId(id),
-            status: 3,
-          },
-          {
-            initiatorId: new mongoose.Types.ObjectId(id),
-            status: 3,
-          },
-        ],
-      },
-    },
-    {
-      $addFields: {
-        friendId: {
-          $cond: {
-            if: {
-              $eq: ["$receiverId", new mongoose.Types.ObjectId(id)],
-            },
-            then: "$initiatorId",
-            else: "$receiverId",
-          },
-        },
-      },
-    },
-    {
-      $lookup: {
-        from: "users",
-        localField: "friendId",
-        foreignField: "_id",
-        as: "joined",
-        pipeline: [
-          {
-            $unset: ["_id", "email", "password", "phone", "createdAt"],
-          },
-        ],
-      },
-    },
-    {
-      $unwind: "$joined",
-    },
-    {
-      $addFields: {
-        friendshipId: "$_id",
-        name: "$joined.name",
-        profilePhoto: "$joined.profilePhoto",
-      },
-    },
-    {
-      $project: {
-        joined: 0,
-        __v: 0,
-        latestInteractedAt: 0,
-        createdAt: 0,
-      },
-    },
-    {
-      $unwind: {
-        path: "$joined",
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-    {
-      $project: {
-        _id: 0,
-        friendId: 1,
-      },
-    },
-    {
-      $unset: "joined",
-    },
-  ]);
+const messageController = {
+  getMessages: async function (req: Request, res: Response) {
+    try {
+      const { roomId, currentUserId, friendId } = req.body;
+      const { data, error } = await messageService.getMessages({
+        roomId,
+        currentUserId,
+        friendId,
+      });
 
-  return result;
-}
+      if (error)
+        return res
+          .status(401)
+          .json(ErrorResponse(error.message, error.errorCode));
+
+      res.status(200).json(data);
+    } catch (error) {
+      return res.status(500).json(ErrorResponse("Internal server error!"));
+    }
+  },
+  deleteOneMessageBySender: async function (req: Request, res: Response) {
+    try {
+      const { roomId, userId, friendId, messageId } = req.body;
+
+      const { data, error } = await messageService.deleteMessageBySender({
+        roomId,
+        userId,
+        friendId,
+        messageId,
+      });
+
+      if (error) return res.status(401).json(ErrorResponse(error.message));
+
+      sockets.get(userId)?.forEach((socket) =>
+        socket.emit("deleteMessage", {
+          messageId: data._id,
+          deleteBySender: true,
+        })
+      );
+      sockets.get(friendId)?.forEach((socket) =>
+        socket.emit("deleteMessage", {
+          messageId: data._id,
+          deleteBySender: true,
+        })
+      );
+
+      return res.status(200).json(SuccessResponse(data, "success deleted!"));
+    } catch (error) {
+      return res.status(404).json(ErrorResponse(error));
+    }
+  },
+  deleteOneMessageByReceiver: async function (req: Request, res: Response) {
+    try {
+      const { roomId, userId, friendId, messageId } = req.body;
+
+      const { data, error } = await messageService.deleteMessageByReceiver({
+        roomId,
+        userId,
+        friendId,
+        messageId,
+      });
+
+      if (error) return res.status(404).json(ErrorResponse(error.message));
+
+      sockets.get(userId)?.forEach((socket) =>
+        socket.emit("deleteMessage", {
+          messageId: messageId,
+          deleteBySender: false,
+        })
+      );
+      sockets.get(friendId)?.forEach((socket) =>
+        socket.emit("deleteMessage", {
+          messageId: messageId,
+          deleteBySender: false,
+        })
+      );
+
+      return res
+        .status(200)
+        .json(SuccessResponse(data, "successfully deleted!"));
+    } catch (error) {
+      return res.status(404).json(ErrorResponse(error));
+    }
+  },
+  getMessagesByPagination: async function (req: Request, res: Response) {
+    try {
+      const { roomId, currentUserId, friendId, lastMessageId } = req.body;
+      const { data, error } = await messageService.getMessagesByPagination({
+        roomId,
+        currentUserId,
+        friendId,
+        lastMessageId,
+      });
+      if (error) return res.status(404).send(error);
+      // return res.status(200).send({ data, lastMessageId: data[0].messageId });
+      return res.status(200).send(data);
+    } catch (error) {
+      return res.status(500).json(ErrorResponse("Internal server error!"));
+    }
+  },
+};
+
+export default messageController;

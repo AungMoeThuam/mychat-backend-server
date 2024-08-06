@@ -1,4 +1,4 @@
-import messageController from "../http-controller/messageController";
+import messageController from "../controller/messageController";
 import { Router } from "express";
 const messageRoute = Router();
 

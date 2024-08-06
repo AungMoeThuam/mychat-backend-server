@@ -1,5 +1,5 @@
 import { Router } from "express";
-import userController from "../http-controller/userController";
+import userController from "../controller/userController";
 const userRoute = Router();
 
 userRoute.post("/users/search", userController.searchPeople);

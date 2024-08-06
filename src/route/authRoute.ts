@@ -1,5 +1,5 @@
 import { Router } from "express";
-import userController from "../http-controller/userController";
+import userController from "../controller/userController";
 const authRoute = Router();
 
 authRoute.post("/user/register", userController.registerUser);

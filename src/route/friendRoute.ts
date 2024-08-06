@@ -1,5 +1,5 @@
 import { Router } from "express";
-import friendshipController from "../http-controller/friendshipController";
+import friendshipController from "../controller/friendshipController";
 
 const friendRoute = Router();
 

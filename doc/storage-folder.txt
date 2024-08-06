@@ -1,0 +1,7 @@
+developer should create 3 folders inside storage folder.
+3 folders are chats, profiles, and temp.
+chats folder is to store media files from chat messages.
+profiles folder is to store profile picture of users
+temp folder is to store temp files of users for compressing before uploading to the chats folder.
+
+folder names should be exactly "chats", "profiles", and "temp.

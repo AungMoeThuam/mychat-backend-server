@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 dotenv.config();
 
-const url = `mongodb://127.0.0.1:27017/${process.env.DB_NAME}`;
+const url = `${process.env.DB_URL}/${process.env.DB_NAME}`;
 
 async function db() {
   try {

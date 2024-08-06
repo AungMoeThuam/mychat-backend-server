@@ -1,12 +1,12 @@
 import { Request, Response } from "express";
 import fs from "fs";
 import fsPromise from "fs/promises";
-import storagePath from "../storagePath";
 import multer, { MulterError } from "multer";
-import { ErrorResponse, SuccessResponse } from "../helper/helper";
+import { ErrorResponse, SuccessResponse } from "../utils/helper";
 import usermodel from "../model/userModel";
 import { Worker } from "worker_threads";
 import path from "path";
+import { fileStoragePath } from "../utils/fileStoragePath";
 const imageTypes = [
   "image/jpeg",
   "image/png",
@@ -17,7 +17,9 @@ const imageTypes = [
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, storagePath + "/storage/profiles");
+    console.log("d is ", fileStoragePath);
+
+    cb(null, fileStoragePath + "/profiles");
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
@@ -72,9 +74,10 @@ const fileController = {
             new: true,
           }
         );
+
         if (oldResult.profilePhoto)
           await fsPromise.rm(
-            storagePath + "/storage/profiles/" + oldResult.profilePhoto.path
+            fileStoragePath + "/profiles/" + oldResult.profilePhoto.path
           );
 
         return res.status(200).json(result);
@@ -87,49 +90,43 @@ const fileController = {
     let fileName = req.headers["x-filename"].toString();
     let extension = path.extname(fileName);
 
-    console.log(extension);
-
     let isImageFile = extension !== ".mp4";
-    console.log(isImageFile);
     const wr = isImageFile
-      ? fs.createWriteStream(
-          `${storagePath}/storage/chats/${req.headers["x-filename"]}`
-        )
-      : fs.createWriteStream(
-          `${storagePath}/storage/temp/${req.headers["x-filename"]}`
-        );
+      ? fs.createWriteStream(`${fileStoragePath}/chats/${fileName}`)
+      : fs.createWriteStream(`${fileStoragePath}/temp/${fileName}`);
     req.pipe(wr).on("finish", () => {
       if (isImageFile) {
         return res.status(200).json({ status: "success" });
       }
-      let worker = new Worker(
-        storagePath + "/worker-threads/fileCompressingWorker.ts",
-        {
-          workerData: {
-            fileName: req.headers["x-filename"],
-          },
-        }
+
+      let workerFilePath = path.join(
+        __dirname,
+        "../",
+        "/worker-threads/fileCompressingWorker.ts"
       );
+      let worker = new Worker(workerFilePath, {
+        workerData: {
+          fileName: fileName,
+        },
+      });
 
       worker.on("message", async (value) => {
+        console.log("work message event", value);
+
         if (value === true) {
-          await fsPromise.unlink(
-            `${storagePath}/storage/temp/${req.headers["x-filename"]}`
-          );
+          await fsPromise.unlink(`${fileStoragePath}/temp/${fileName}`);
           return res.status(200).json({ status: "success" });
         }
 
-        fs.unlink(
-          `${storagePath}/storage/temp/${req.headers["x-filename"]}`,
-          () => res.status(404).json({ error: "error in file upload!" })
+        fs.unlink(`${fileStoragePath}/temp/${fileName}`, () =>
+          res.status(404).json({ error: "error in file upload!" })
         );
       });
 
       worker.on("error", (err) => {
         console.log("err in worker", err);
-        return fs.unlink(
-          `${storagePath}/storage/temp/${req.headers["x-filename"]}`,
-          () => res.status(404).json({ error: "error in file upload!" })
+        return fs.unlink(`${fileStoragePath}/temp/${fileName}`, () =>
+          res.status(404).json({ error: "error in file upload!" })
         );
       });
     });
