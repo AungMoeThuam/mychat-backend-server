@@ -75,7 +75,11 @@ const fileController = {
           }
         );
 
-        if (oldResult.profilePhoto)
+        if (
+          oldResult.profilePhoto !== undefined &&
+          oldResult.profilePhoto !== null &&
+          oldResult.profilePhoto.path !== ""
+        )
           await fsPromise.rm(
             fileStoragePath + "/profiles/" + oldResult.profilePhoto.path
           );
