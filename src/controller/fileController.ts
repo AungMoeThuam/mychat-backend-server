@@ -75,18 +75,14 @@ const fileController = {
           }
         );
 
-        if (
-          oldResult.profilePhoto !== undefined &&
-          oldResult.profilePhoto !== null &&
-          oldResult.profilePhoto.path !== ""
-        )
+        if (oldResult.profilePhoto.path !== undefined)
           await fsPromise.rm(
             fileStoragePath + "/profiles/" + oldResult.profilePhoto.path
           );
 
         return res.status(200).json(result);
       } catch (error) {
-        return res.status(500).json(ErrorResponse(error.message));
+        return res.status(500).json(ErrorResponse("server error!"));
       }
     });
   },
