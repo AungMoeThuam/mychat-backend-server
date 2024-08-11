@@ -225,16 +225,12 @@ async function ioConnection(
     socket.on("leave_room_event", (roomId) => socket.leave(roomId));
 
     //socket showing typing events when chatting
-    socket.on(Events.START_TYPING, (data) => {
-      sockets
-        .get(data.friendId)
-        ?.forEach((socket) => socket.emit(Events.START_TYPING));
-    });
-    socket.on(Events.STOP_TYPING, (data) => {
-      sockets
-        .get(data.friendId)
-        ?.forEach((socket) => socket.emit(Events.STOP_TYPING));
-    });
+    socket.on(Events.START_TYPING, (data) =>
+      socket.in(data.roomId).emit(Events.START_TYPING)
+    );
+    socket.on(Events.STOP_TYPING, (data) =>
+      socket.in(data.roomId).emit(Events.STOP_TYPING)
+    );
 
     //socket on disconnect
     socket.on("disconnect", () => {

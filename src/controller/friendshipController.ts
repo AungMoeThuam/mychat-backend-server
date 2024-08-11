@@ -320,7 +320,7 @@ const friendshipController = {
             $unset: ["joined", "joined1"],
           },
         ])
-        .sort({ messageCreatedAt: -1 });
+        .sort({ lastMessageCreatedAt: -1 });
 
       const newList = result.map((f) => {
         if (activeUserList.filter((s) => s == f.friendId).length === 1) {
